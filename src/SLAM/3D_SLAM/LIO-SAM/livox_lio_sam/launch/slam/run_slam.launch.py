@@ -23,7 +23,7 @@ def generate_launch_description():
 
     share_dir = get_package_share_directory('livox_lio_sam')
     # src 폴더 경로 (rviz config 수정/저장 편의를 위해)
-    src_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
     parameter_file = LaunchConfiguration('params_file')
     xacro_path = os.path.join(share_dir, 'config', 'robot.urdf.xacro')
     # RViz config - src 폴더에서 직접 로드 (수정/저장 편의)
