@@ -21,11 +21,11 @@
 
     # Export settings (disabled in localization mode)
     savePCD: false
-    savePCDDirectory: "~/Study/ros2_3dslam_ws/maps/lio_sam/"
+    savePCDDirectory: "/Study/ros2_3dslam_ws/maps/lio_sam/"
 
     # Localization settings (Localization mode)
     localizationMode: true
-    globalMapPath: "~/Study/ros2_3dslam_ws/maps/lio_sam/GlobalMap.pcd"
+    globalMapPath: "/home/amap/Study/ros2_3dslam_ws/maps/lio_sam/GlobalMap.pcd"
 
     # Sensor Settings (Pioneer2dx 16-channel 3D LiDAR)
     sensor: velodyne

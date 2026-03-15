@@ -21,7 +21,7 @@
 
     # Export settings
     savePCD: true
-    savePCDDirectory: "~/Study/ros2_3dslam_ws/maps/lio_sam/"
+    savePCDDirectory: "/Study/ros2_3dslam_ws/maps/lio_sam/"
 
     # Localization settings (SLAM mode)
     localizationMode: false

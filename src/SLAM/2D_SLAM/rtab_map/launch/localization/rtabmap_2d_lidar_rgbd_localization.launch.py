@@ -13,8 +13,8 @@ Required Topics:
 - /camera/depth/camera_info (sensor_msgs/CameraInfo)
 
 Usage:
-    ros2 launch rtab_map_config localization/rtabmap_2d_lidar_rgbd_localization.launch.py
-    ros2 launch rtab_map_config localization/rtabmap_2d_lidar_rgbd_localization.launch.py database_path:=/path/to/rtabmap.db
+    ros2 launch rtab_map_config rtabmap_2d_lidar_rgbd_localization.launch.py
+    ros2 launch rtab_map_config rtabmap_2d_lidar_rgbd_localization.launch.py database_path:=/path/to/rtabmap.db
 """
 
 import os

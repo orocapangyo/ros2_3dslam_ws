@@ -89,9 +89,9 @@
             <z><noise type="gaussian"><mean>0</mean><stddev>0.009</stddev></noise></z>
           </angular_velocity>
           <linear_acceleration>
-            <x><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></x>
-            <y><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></y>
-            <z><noise type="gaussian"><mean>0</mean><stddev>0.1</stddev></noise></z>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.001</stddev></noise></z>
           </linear_acceleration>
         </imu>
       </sensor>

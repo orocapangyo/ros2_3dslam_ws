@@ -7,7 +7,7 @@ Required Topics:
 - /scan (sensor_msgs/LaserScan)
 
 Usage:
-    ros2 launch rtab_map_config slam/rtabmap_lidar_slam.launch.py
+    ros2 launch rtab_map_config rtabmap_lidar_slam.launch.py
 """
 
 import os

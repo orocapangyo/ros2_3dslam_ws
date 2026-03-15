@@ -3,7 +3,10 @@ project(cartographer_slam)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config launch rviz
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY config rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

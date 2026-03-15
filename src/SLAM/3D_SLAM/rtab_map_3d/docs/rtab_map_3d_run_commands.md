@@ -16,6 +16,9 @@ source install/setup.bash
 
 ### 1단계: Gazebo 시뮬레이터 기동
 
+> RTAB-Map 3D는 자체 odom 프레임(`odom_rtabmap`)을 사용하므로 Gazebo odom TF와 충돌하지 않습니다.
+> 단, 3D LiDAR 전용 모드에서는 `/odom` 토픽이 불필요하므로 `gazebo_no_odom` 사용을 권장합니다.
+
 ```bash
 ros2 launch tm_gazebo gazebo_no_odom.launch.py
 ```
@@ -28,10 +31,10 @@ ros2 launch tm_gazebo gazebo_no_odom.launch.py
 
 ```bash
 # 매핑
-ros2 launch rtab_map_3d_config slam/rtabmap_rgbd_slam_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_rgbd_slam_gazebo.launch.py
 
 # 위치추정
-ros2 launch rtab_map_3d_config localization/rtabmap_rgbd_localization_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_rgbd_localization_gazebo.launch.py
 ```
 
 ---
@@ -40,34 +43,58 @@ ros2 launch rtab_map_3d_config localization/rtabmap_rgbd_localization_gazebo.lau
 
 ```bash
 # 매핑
-ros2 launch rtab_map_3d_config slam/rtabmap_2dlidar_rgbd_slam_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_2dlidar_rgbd_slam_gazebo.launch.py
 
 # 위치추정
-ros2 launch rtab_map_3d_config localization/rtabmap_2dlidar_rgbd_localization_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_2dlidar_rgbd_localization_gazebo.launch.py
 ```
 
 ---
 
-#### 3D LiDAR 전용 (PointCloud2 기반)
+#### 3D LiDAR 전용 (카메라 없음)
 
 ```bash
 # 매핑
-ros2 launch rtab_map_3d_config slam/rtabmap_3d_slam_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_only_slam_gazebo.launch.py
 
 # 위치추정
-ros2 launch rtab_map_3d_config localization/rtabmap_3d_localization_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_only_localization_gazebo.launch.py
 ```
 
 ---
 
-#### 3D LiDAR + RGB-D (ICP + RGBD odometry)
+#### 3D LiDAR + RGB 카메라 (Depth 없음, 시각적 루프 클로저)
 
 ```bash
 # 매핑
-ros2 launch rtab_map_3d_config slam/rtabmap_livox_rgbd_slam_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_rgb_slam_gazebo.launch.py
 
 # 위치추정
-ros2 launch rtab_map_3d_config localization/rtabmap_livox_rgbd_localization_gazebo.launch.py
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_rgb_localization_gazebo.launch.py
+```
+
+---
+
+#### 3D LiDAR + RGB-D 카메라 (ICP + 시각적 루프 클로저)
+
+```bash
+# 매핑
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_rgbd_slam_gazebo.launch.py
+
+# 위치추정
+ros2 launch rtab_map_3d_config rtabmap_3dlidar_rgbd_localization_gazebo.launch.py
+```
+
+---
+
+#### 3D LiDAR + RGB-D (Livox Mid-360, ICP + RGBD odometry)
+
+```bash
+# 매핑
+ros2 launch rtab_map_3d_config rtabmap_livox_rgbd_slam_gazebo.launch.py
+
+# 위치추정
+ros2 launch rtab_map_3d_config rtabmap_livox_rgbd_localization_gazebo.launch.py
 ```
 
 ---
@@ -99,10 +126,10 @@ ros2 launch rtab_map_3d_config rtabmap_3d_full_gazebo.launch.py mode:=localizati
 
 ```bash
 # RViz 없이 실행
-ros2 launch rtab_map_3d_config slam/rtabmap_rgbd_slam_gazebo.launch.py rviz:=false
+ros2 launch rtab_map_3d_config rtabmap_rgbd_slam_gazebo.launch.py rviz:=false
 
 # 커스텀 DB 경로 (localization)
-ros2 launch rtab_map_3d_config localization/rtabmap_rgbd_localization_gazebo.launch.py \
+ros2 launch rtab_map_3d_config rtabmap_rgbd_localization_gazebo.launch.py \
   database_path:=$HOME/Study/ros2_3dslam_ws/maps/rtabmap_3d/rtabmap.db
 ```
 

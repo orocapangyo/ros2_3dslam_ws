@@ -1,12 +1,12 @@
-cmake_minimum_required(VERSION 3.8)
-project(rtab_map_config)
+cmake_minimum_required(VERSION 3.5)
+project(cartographer_slam_3d)
 
 find_package(ament_cmake REQUIRED)
 
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}
 )
-install(DIRECTORY rviz
+install(DIRECTORY config rviz docs scripts
   DESTINATION share/${PROJECT_NAME}
 )
 

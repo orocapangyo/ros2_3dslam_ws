@@ -12,8 +12,8 @@ Required Topics (Gazebo):
 - /camera/depth/camera_info (sensor_msgs/CameraInfo)
 
 Usage:
-    ros2 launch rtab_map_config slam/rtabmap_2d_lidar_rgbd_slam.launch.py
-    ros2 launch rtab_map_config slam/rtabmap_2d_lidar_rgbd_slam.launch.py scan_topic:=/scan
+    ros2 launch rtab_map_config rtabmap_2d_lidar_rgbd_slam.launch.py
+    ros2 launch rtab_map_config rtabmap_2d_lidar_rgbd_slam.launch.py scan_topic:=/scan
 """
 
 import os

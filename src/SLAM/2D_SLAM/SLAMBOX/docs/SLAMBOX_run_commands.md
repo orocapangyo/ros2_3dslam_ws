@@ -28,6 +28,9 @@ source install/setup.bash
 
 ### 1단계: Gazebo 시뮬레이터 기동
 
+> SLAM Toolbox / Hector는 외부 odom이 필요합니다(Hector는 선택).
+> **`odom_tf:=false`를 사용하지 마세요** — 2D SLAM은 Gazebo의 odom TF가 필수입니다.
+
 ```bash
 ros2 launch tm_gazebo gazebo.launch.py
 ```

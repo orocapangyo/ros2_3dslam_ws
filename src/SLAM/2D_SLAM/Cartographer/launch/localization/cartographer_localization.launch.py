@@ -4,8 +4,8 @@ Cartographer Gazebo Localization Launch File
 가제보 시뮬레이션용. 기존 .pbstream 지도 파일을 로드하여 위치추정만 수행.
 
 Usage:
-    ros2 launch cartographer_slam localization/cartographer_localization.launch.py
-    ros2 launch cartographer_slam localization/cartographer_localization.launch.py map_file:=/path/to/map.pbstream
+    ros2 launch cartographer_slam cartographer_localization.launch.py
+    ros2 launch cartographer_slam cartographer_localization.launch.py map_file:=/path/to/map.pbstream
 """
 
 import os

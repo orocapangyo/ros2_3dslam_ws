@@ -4,7 +4,7 @@ RTAB-Map Gazebo 2D LiDAR Localization
 가제보 시뮬레이션용. LiDAR ICP 기반 Localization.
 
 Usage:
-    ros2 launch rtab_map_config localization/rtabmap_lidar_localization.launch.py
+    ros2 launch rtab_map_config rtabmap_lidar_localization.launch.py
 """
 
 import os

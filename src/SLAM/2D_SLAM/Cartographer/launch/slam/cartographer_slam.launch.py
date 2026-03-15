@@ -4,7 +4,7 @@ Cartographer Gazebo Launch File
 가제보 시뮬레이션용.
 
 Usage:
-    ros2 launch cartographer_slam slam/cartographer_slam.launch.py
+    ros2 launch cartographer_slam cartographer_slam.launch.py
 """
 
 import os
