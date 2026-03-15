@@ -54,11 +54,34 @@ ros2 launch livox_lio_sam run_slam_gazebo.launch.py
 - `livox_lio_sam_mapOptimization`: ICP + 루프 클로저 + 지도 최적화
 - `rviz2`: 3D 포인트클라우드 및 경로 시각화
 
-### 3단계: Localization 모드 기동 (저장된 지도 사용)
+### 3단계: 지도 저장
+
+SLAM 모드 실행 중 로봇을 충분히 이동시킨 후 지도를 저장합니다.
+
+```bash
+ros2 service call /lio_sam/save_map livox_lio_sam/srv/SaveMap "{}"
+```
+
+저장 위치: `/home/amap/Study/ros2_3dslam_ws/maps/lio_sam/`
+
+저장되는 파일:
+- `GlobalMap.pcd` - 전체 맵 (Localization에서 사용)
+- `CornerMap.pcd` - 엣지 특징 맵
+- `SurfMap.pcd` - 평면 특징 맵
+- `trajectory.pcd` - 로봇 경로
+- `transformations.pcd` - 키프레임 변환
+
+### 4단계: Localization 모드 기동 (저장된 지도 사용)
 
 사전에 생성된 지도를 사용하여 로봇의 위치를 추정합니다.
 
+> **주의:** Gazebo를 먼저 종료 후 재시작해야 합니다 (SLAM과 동시 실행 불가).
+
 ```bash
+# 터미널 1: Gazebo 재시작
+ros2 launch tm_gazebo gazebo_no_odom.launch.py odom_tf:=false
+
+# 터미널 2: LIO-SAM Localization
 ros2 launch livox_lio_sam run_localization_gazebo.launch.py
 ```
 
@@ -66,24 +89,26 @@ ros2 launch livox_lio_sam run_localization_gazebo.launch.py
 
 ---
 
-## 지도 저장 및 로드
+## 검증 명령어
 
-### 지도 저장
-
-SLAM 모드 실행 중 언제든지 저장 가능:
+SLAM/Localization 실행 중 별도 터미널에서 확인할 수 있습니다.
 
 ```bash
-ros2 service call /lio_sam/save_map livox_lio_sam/srv/SaveMap
-```
+# 센서 주파수 확인
+ros2 topic hz /scan/points      # ~20Hz 정상
+ros2 topic hz /imu/data         # ~200Hz 정상
 
-저장 위치: `~/Study/ros2_3dslam_ws/maps/lio_sam/` (params_slam_gazebo.yaml의 `savePCDDirectory` 참고)
+# TF 확인 (roll ≈ 0, pitch ≈ 0 이어야 정상)
+ros2 run tf2_ros tf2_echo odom base_link
 
-### 저장된 지도 사용
+# 맵핑 오도메트리 위치 확인
+ros2 topic echo /lio_sam/mapping/odometry --field pose.pose.position
 
-Localization 모드에서 사용할 전역 지도 경로:
+# 노드 상태
+ros2 node list | grep livox_lio_sam
 
-```
-~/Study/ros2_3dslam_ws/maps/lio_sam/GlobalMap.pcd
+# TF 트리 확인
+ros2 run tf2_tools view_frames
 ```
 
 ---
@@ -140,7 +165,7 @@ SLAM 파라미터와 동일하지만 다음 설정이 다릅니다:
 
 ```yaml
 localizationMode: true
-globalMapPath: "~/Study/ros2_3dslam_ws/maps/lio_sam/GlobalMap.pcd"
+globalMapPath: "/home/amap/Study/ros2_3dslam_ws/maps/lio_sam/GlobalMap.pcd"
 savePCD: false                               # 지도 저장 안 함 (읽기만)
 ```
 
