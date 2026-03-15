@@ -73,6 +73,11 @@ install(
 )
 
 install(
+  DIRECTORY rviz2
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+install(
   TARGETS ${PROJECT_NAME}_imageProjection
   DESTINATION lib/${PROJECT_NAME}
 )
