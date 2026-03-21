@@ -278,3 +278,113 @@ ros2 launch tm_gazebo gazebo_no_odom.launch.py odom_tf:=false
 | **Hector SLAM** | 불필요 | `gazebo.launch.py` | `true` (기본값) |
 
 **핵심 원칙:** SLAM이 자체 odom을 `odom` 프레임으로 발행하면, Gazebo의 odom TF를 반드시 끄세요.
+
+---
+
+## 2026-03-22
+
+### [REFACTOR] SLAM 패키지 rviz → rviz2 폴더 표준화
+
+**배경:** 각 SLAM 패키지의 RViz 설정 폴더 이름이 `rviz/`로 되어 있어 ROS2 도구명(`rviz2`)과 불일치. LIO-SAM은 `config/rviz2.rviz`에 별도 위치.
+
+**변경 내용:**
+
+1. **폴더 이름 변경** (7개 패키지):
+
+| 패키지 | 변경 전 | 변경 후 |
+|--------|---------|---------|
+| Cartographer 2D | `rviz/` | `rviz2/` |
+| SLAMBOX | `rviz/` | `rviz2/` |
+| Hector SLAM | `rviz/` | `rviz2/` |
+| RTAB-Map 2D | `rviz/` | `rviz2/` |
+| RTAB-Map 3D | `rviz/` | `rviz2/` |
+| LIO-SAM | `config/rviz2.rviz` | `rviz2/lio_sam.rviz` |
+| Cartographer 3D | `rviz/` | `rviz2/` |
+
+2. **Launch 파일 일괄 수정** (53개):
+   - 모든 `os.path.join(pkg_src, 'rviz', ...)` → `os.path.join(pkg_src, 'rviz2', ...)`
+   - LIO-SAM: `os.path.join(src_dir, 'config', 'rviz2.rviz')` → `os.path.join(src_dir, 'rviz2', 'lio_sam.rviz')`
+
+3. **파일명 수정**: `hector_slam_ros2/rviz/k_slam.rviz` → `hector_slam_ros2/rviz2/hector_slam.rviz` (launch 파일과 일치하도록)
+
+---
+
+### [FIX] RViz config 필수 토픽 누락 보완
+
+**증상:** 일부 rviz config에 Odometry 디스플레이 없어 odom 시각화 불가
+
+**검토 결과** (16개 config 전수 검토):
+
+| Config | Map | Sensor | Odom | TF | 조치 |
+|--------|-----|--------|------|----|------|
+| Cartographer 2D | `/map` | `/scan` | **누락** | O | `/odom` 추가 |
+| Hector SLAM (hector_slam_ros2) | `/map` | `/scan` | **누락** | O | `/odom` 추가 |
+| SLAMBOX hector_slam | `/map` | `/scan` | **누락** | O | `/odom` 추가 |
+| LIO-SAM | `/lio_sam/mapping/map_global` | `/lio_sam/mapping/cloud_registered` | **누락** | O | `/lio_sam/mapping/odometry` 추가 |
+| SLAMBOX slam_toolbox | `/map` | `/scan` | `/odom` | O | OK |
+| RTAB-Map 2D (2개) | `/rtabmap/map` | `/scan_merged` | `/rtabmap/odom` | O | OK |
+| RTAB-Map 3D (8개) | `/rtabmap/map` | 각 센서별 | `/rtabmap/odom` | O | OK |
+| Cartographer 3D | `/map_cloud` | `/scan/points` | `/tracked_pose` | O | OK |
+
+**수정 파일:**
+- `src/SLAM/2D_SLAM/Cartographer/rviz2/cartographer.rviz`
+- `src/SLAM/2D_SLAM/hector_slam_ros2/rviz2/hector_slam.rviz`
+- `src/SLAM/2D_SLAM/SLAMBOX/rviz2/hector_slam.rviz`
+- `src/SLAM/3D_SLAM/LIO-SAM/livox_lio_sam/rviz2/lio_sam.rviz`
+
+**필수 디스플레이 체크리스트:** 모든 SLAM rviz config에는 최소 Grid, TF, Map(또는 PointCloud2 맵), Sensor(LaserScan/PointCloud2), Odometry가 포함되어야 함.
+
+---
+
+### [FIX] LIO-SAM odom→lidar_link TF 중복 경로
+
+**증상:** LIO-SAM + Gazebo 실행 시 TF 트리에 `odom`에서 `lidar_link`까지 두 경로 존재
+
+**원인:** `mapOptmization.cpp`에서 `odom → lidar_link` TF를 항상 발행. Gazebo 정적 TF `base_link → lidar_link`와 결합하면 중복:
+1. `odom → base_link → lidar_link` (TransformFusion + Gazebo)
+2. `odom → lidar_link` (mapOptimization 직접 발행)
+
+**해결:** `mapOptmization.cpp:1901`에서 조건부 발행. `lidarFrame == baselinkFrame`일 때만:
+
+```cpp
+if (lidarFrame == baselinkFrame) {
+    br->sendTransform(trans_odom_to_lidar);
+}
+```
+
+**수정 파일:** `src/SLAM/3D_SLAM/LIO-SAM/livox_lio_sam/src/mapOptmization.cpp`
+
+---
+
+### [FIX] LIO-SAM RViz config 경로 오류 (dirname 깊이 부족)
+
+**증상:** RViz2에 Grid만 표시. 타이틀바: `.../launch/config/rviz2.rviz` (잘못된 경로)
+
+**원인:** 론치파일이 `launch/slam/` (2단계 깊이)에 위치. `os.path.dirname` 2번은 `launch/`까지만 올라감.
+
+```python
+# 수정 전: launch/ 까지만 올라감
+src_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+# 수정 후: 패키지 루트까지 올라감
+src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+```
+
+**수정 파일:** 4개 론치파일 전부
+
+---
+
+### [FIX] YAML config 절대경로 → 이식 가능 경로
+
+**증상:** `savePCDDirectory`, `globalMapPath`에 `/home/amap/...` 절대경로 → 다른 PC 동작 불가
+
+**해결:** YAML에 `~/` 경로, 론치파일에서 `os.path.expanduser()`로 확장 후 파라미터 오버라이드:
+
+```python
+save_pcd_dir = os.path.expanduser('~/Study/ros2_3dslam_ws/maps/lio_sam/')
+Node(..., parameters=[parameter_file, {'savePCDDirectory': save_pcd_dir}])
+```
+
+**수정 파일:**
+- `config/params_slam_gazebo.yaml`, `config/params_localization_gazebo.yaml`
+- `launch/slam/run_slam_gazebo.launch.py`
