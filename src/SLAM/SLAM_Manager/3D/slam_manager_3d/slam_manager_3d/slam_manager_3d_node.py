@@ -108,6 +108,10 @@ class SlamManager3DNode(Node):
             'rgbd_loc': None,
             'rgbd_lidar_mapping': None,
             'rgbd_lidar_loc': None,
+            'lio_sam_mapping': None,
+            'lio_sam_loc': None,
+            'rtabmap_3dlidar_mapping': None,
+            'rtabmap_3dlidar_loc': None,
         }
 
         # Store launch file paths
@@ -117,18 +121,30 @@ class SlamManager3DNode(Node):
             'rgbd_loc': None,
             'rgbd_lidar_mapping': None,
             'rgbd_lidar_loc': None,
+            'lio_sam_mapping': None,
+            'lio_sam_loc': None,
+            'rtabmap_3dlidar_mapping': None,
+            'rtabmap_3dlidar_loc': None,
         }
 
         # Workspace path
         self.workspace_path = get_workspace_path()
 
-        # Current 3D position (6-DOF)
+        # Current 3D position (6-DOF) - RTAB-Map
         self.rtabmap3d_x = 0.0
         self.rtabmap3d_y = 0.0
         self.rtabmap3d_z = 0.0
         self.rtabmap3d_roll = 0.0
         self.rtabmap3d_pitch = 0.0
         self.rtabmap3d_yaw = 0.0
+
+        # Current 3D position (6-DOF) - LIO-SAM
+        self.liosam_x = 0.0
+        self.liosam_y = 0.0
+        self.liosam_z = 0.0
+        self.liosam_roll = 0.0
+        self.liosam_pitch = 0.0
+        self.liosam_yaw = 0.0
 
         # QoS for odometry subscription
         odom_qos = QoSProfile(
@@ -145,24 +161,44 @@ class SlamManager3DNode(Node):
             odom_qos
         )
 
+        # LIO-SAM odometry subscriber
+        self.liosam_pose_sub = self.create_subscription(
+            Odometry,
+            '/lio_sam/mapping/odometry',
+            self._liosam_odom_callback,
+            odom_qos
+        )
+
         self.get_logger().info('SLAM Manager 3D Node initialized')
 
     def _rtabmap3d_odom_callback(self, msg):
-        """Handle RTAB-Map 3D odometry messages"""
-        # Extract position
+        """Handle RTAB-Map 3D odometry messages (RGB-D, RGB-D+LiDAR, 3D LiDAR)"""
         self.rtabmap3d_x = msg.pose.pose.position.x
         self.rtabmap3d_y = msg.pose.pose.position.y
         self.rtabmap3d_z = msg.pose.pose.position.z
 
-        # Convert quaternion to euler
         q = msg.pose.pose.orientation
         self.rtabmap3d_roll, self.rtabmap3d_pitch, self.rtabmap3d_yaw = quaternion_to_euler(q)
 
-        # Update UI if available
         if self.ui:
             self.ui.update_rtabmap3d_position(
                 self.rtabmap3d_x, self.rtabmap3d_y, self.rtabmap3d_z,
                 self.rtabmap3d_roll, self.rtabmap3d_pitch, self.rtabmap3d_yaw
+            )
+
+    def _liosam_odom_callback(self, msg):
+        """Handle LIO-SAM odometry messages"""
+        self.liosam_x = msg.pose.pose.position.x
+        self.liosam_y = msg.pose.pose.position.y
+        self.liosam_z = msg.pose.pose.position.z
+
+        q = msg.pose.pose.orientation
+        self.liosam_roll, self.liosam_pitch, self.liosam_yaw = quaternion_to_euler(q)
+
+        if self.ui:
+            self.ui.update_liosam_position(
+                self.liosam_x, self.liosam_y, self.liosam_z,
+                self.liosam_roll, self.liosam_pitch, self.liosam_yaw
             )
 
     def _is_gazebo_running(self):
@@ -233,7 +269,8 @@ class SlamManager3DNode(Node):
         """Start a ROS2 launch file using package name"""
         # Kill Gazebo's odom_to_tf when starting RTAB-Map in Gazebo (TF conflict prevention)
         # Only needed for Gazebo simulation where odom_to_tf publishes odom -> base_link
-        if process_name in ['rgbd_mapping', 'rgbd_loc', 'rgbd_lidar_mapping', 'rgbd_lidar_loc']:
+        if process_name in ['rgbd_mapping', 'rgbd_loc', 'rgbd_lidar_mapping', 'rgbd_lidar_loc',
+                           'lio_sam_mapping', 'lio_sam_loc']:
             if self._is_gazebo_running():
                 self._kill_gazebo_odom_to_tf()
 
@@ -433,6 +470,76 @@ exec {' '.join(cmd)}
         time.sleep(0.5)
         self.get_logger().info('RTAB-Map process cleanup complete')
 
+    def _kill_liosam_processes(self):
+        """Kill all LIO-SAM related processes directly."""
+        self.get_logger().info('Killing LIO-SAM related processes...')
+
+        executables_to_kill = [
+            'livox_lio_sam_imuPreintegration',
+            'livox_lio_sam_imageProjection',
+            'livox_lio_sam_featureExtraction',
+            'livox_lio_sam_mapOptimization',
+        ]
+
+        for exe in executables_to_kill:
+            try:
+                result = subprocess.run(
+                    ['pkill', '-9', '-f', exe],
+                    capture_output=True,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    self.get_logger().info(f'Killed: {exe}')
+            except Exception:
+                pass
+
+        # Kill ros2 launch processes for LIO-SAM
+        try:
+            subprocess.run(
+                ['pkill', '-9', '-f', 'ros2 launch.*livox_lio_sam'],
+                capture_output=True,
+                timeout=3
+            )
+        except Exception:
+            pass
+
+        # Kill RViz with lio_sam config
+        try:
+            result = subprocess.run(
+                ['pgrep', '-f', 'rviz2'],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            cmdline_result = subprocess.run(
+                                ['cat', f'/proc/{pid}/cmdline'],
+                                capture_output=True,
+                                text=True,
+                                timeout=2
+                            )
+                            if 'lio_sam' in cmdline_result.stdout:
+                                os.kill(int(pid), signal.SIGKILL)
+                                self.get_logger().info(f'Killed RViz PID: {pid}')
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        # ROS2 daemon restart
+        try:
+            subprocess.run(['ros2', 'daemon', 'stop'], capture_output=True, timeout=5)
+            subprocess.run(['ros2', 'daemon', 'start'], capture_output=True, timeout=5)
+        except Exception:
+            pass
+
+        time.sleep(0.5)
+        self.get_logger().info('LIO-SAM process cleanup complete')
+
     def stop_launch_file(self, process_name):
         """Stop a running launch file process and all child processes"""
         process = self.processes.get(process_name)
@@ -511,10 +618,14 @@ exec {' '.join(cmd)}
             except Exception:
                 pass
 
-            # Method 7: Kill RTAB-Map processes directly (ros2 launch child processes)
-            if process_name in ['rgbd_mapping', 'rgbd_loc', 'rgbd_lidar_mapping', 'rgbd_lidar_loc']:
+            # Method 7: Kill child processes directly (ros2 launch child processes)
+            if process_name in ['rgbd_mapping', 'rgbd_loc', 'rgbd_lidar_mapping', 'rgbd_lidar_loc',
+                                'rtabmap_3dlidar_mapping', 'rtabmap_3dlidar_loc']:
                 self._kill_rtabmap_processes()
                 self.get_logger().info('Killed RTAB-Map child processes')
+            elif process_name in ['lio_sam_mapping', 'lio_sam_loc']:
+                self._kill_liosam_processes()
+                self.get_logger().info('Killed LIO-SAM child processes')
 
             self.processes[process_name] = None
             self.get_logger().info(f'{process_name} stopped')

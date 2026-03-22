@@ -80,6 +80,21 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         self.btnStopRgbdLidarLoc.clicked.connect(self.on_stop_rgbd_lidar_loc)
         self.btnScanTopics.clicked.connect(self.on_scan_lidar_topics)
 
+        # Connect buttons - LIO-SAM tab
+        self.btnStartLioSamMapping.clicked.connect(self.on_start_liosam_mapping)
+        self.btnStopLioSamMapping.clicked.connect(self.on_stop_liosam_mapping)
+        self.btnBrowseLioSamMap.clicked.connect(self.on_browse_liosam_map)
+        self.btnStartLioSamLoc.clicked.connect(self.on_start_liosam_loc)
+        self.btnStopLioSamLoc.clicked.connect(self.on_stop_liosam_loc)
+
+        # Connect buttons - RTAB-Map 3D LiDAR tab
+        self.btnStart3dLidarMapping.clicked.connect(self.on_start_3dlidar_mapping)
+        self.btnStop3dLidarMapping.clicked.connect(self.on_stop_3dlidar_mapping)
+        self.btnSave3dLidarMap.clicked.connect(self.on_save_3dlidar_map)
+        self.btnBrowse3dLidarMap.clicked.connect(self.on_browse_3dlidar_map)
+        self.btnStart3dLidarLoc.clicked.connect(self.on_start_3dlidar_loc)
+        self.btnStop3dLidarLoc.clicked.connect(self.on_stop_3dlidar_loc)
+
         # Connect common buttons
         self.btnStopAll.clicked.connect(self.on_stop_all)
 
@@ -92,6 +107,10 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         self.txtRgbdMapPath.setText(
             str(self.workspace_path / "maps" / "rtabmap_3d") + "/")
         self.txtRgbdLidarMapPath.setText(
+            str(self.workspace_path / "maps" / "rtabmap_3d") + "/")
+        self.txtLioSamMapPath.setText(
+            str(self.workspace_path / "maps" / "lio_sam" / "GlobalMap.pcd"))
+        self.txt3dLidarMapPath.setText(
             str(self.workspace_path / "maps" / "rtabmap_3d") + "/")
 
         self.log("SLAM Manager 3D UI Ready")
@@ -175,6 +194,10 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
                 'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_loc_gazebo.launch.py'),
                 'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_gazebo.launch.py'),
                 'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_loc_gazebo.launch.py'),
+                'lio_sam_mapping': ('livox_lio_sam', 'run_slam_gazebo.launch.py'),
+                'lio_sam_loc': ('livox_lio_sam', 'run_localization_gazebo.launch.py'),
+                'rtabmap_3dlidar_mapping': ('rtab_map_3d_config', 'rtabmap_3dlidar_only_slam_gazebo.launch.py'),
+                'rtabmap_3dlidar_loc': ('rtab_map_3d_config', 'rtabmap_3dlidar_only_localization_gazebo.launch.py'),
             }
         else:
             self.log("Real robot mode - using real robot launch files")
@@ -185,6 +208,8 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
                 'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_loc.launch.py'),
                 'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd.launch.py'),
                 'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_loc.launch.py'),
+                'lio_sam_mapping': ('livox_lio_sam', 'run_slam.launch.py'),
+                'lio_sam_loc': ('livox_lio_sam', 'run_localization.launch.py'),
             }
 
         # Check each package and register launch files
@@ -230,11 +255,35 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         self.lblRgbdLidarPitch.setText(f"Pitch: {pitch_deg:.1f}")
         self.lblRgbdLidarYaw.setText(f"Yaw: {yaw_deg:.1f}")
 
+    def update_3dlidar_position(self, x, y, z, roll, pitch, yaw):
+        """Update RTAB-Map 3D LiDAR position labels (6-DOF)"""
+        roll_deg = math.degrees(roll)
+        pitch_deg = math.degrees(pitch)
+        yaw_deg = math.degrees(yaw)
+        self.lbl3dLidarPosX.setText(f"X: {x:.3f}")
+        self.lbl3dLidarPosY.setText(f"Y: {y:.3f}")
+        self.lbl3dLidarPosZ.setText(f"Z: {z:.3f}")
+        self.lbl3dLidarRoll.setText(f"Roll: {roll_deg:.1f}")
+        self.lbl3dLidarPitch.setText(f"Pitch: {pitch_deg:.1f}")
+        self.lbl3dLidarYaw.setText(f"Yaw: {yaw_deg:.1f}")
+
+    def update_liosam_position(self, x, y, z, roll, pitch, yaw):
+        """Update LIO-SAM position labels (6-DOF)"""
+        roll_deg = math.degrees(roll)
+        pitch_deg = math.degrees(pitch)
+        yaw_deg = math.degrees(yaw)
+        self.lblLioSamPosX.setText(f"X: {x:.3f}")
+        self.lblLioSamPosY.setText(f"Y: {y:.3f}")
+        self.lblLioSamPosZ.setText(f"Z: {z:.3f}")
+        self.lblLioSamRoll.setText(f"Roll: {roll_deg:.1f}")
+        self.lblLioSamPitch.setText(f"Pitch: {pitch_deg:.1f}")
+        self.lblLioSamYaw.setText(f"Yaw: {yaw_deg:.1f}")
+
     def update_rtabmap3d_position(self, x, y, z, roll, pitch, yaw):
-        """Update position for current active tab (for node callback)"""
-        # Update both tabs since we use same odom topic
+        """Update position for all RTAB-Map tabs (same /rtabmap/odom topic)"""
         self.update_rgbd_position(x, y, z, roll, pitch, yaw)
         self.update_rgbd_lidar_position(x, y, z, roll, pitch, yaw)
+        self.update_3dlidar_position(x, y, z, roll, pitch, yaw)
 
     # ==================== Data Source Tab ====================
 
@@ -575,6 +624,160 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             self.log("RTAB-Map RGB-D + LiDAR Localization stopped")
             self.update_button_states()
 
+    # ==================== LIO-SAM Tab ====================
+
+    def on_start_liosam_mapping(self):
+        """Start LIO-SAM SLAM mapping"""
+        launch_info = self.node.launch_files.get('lio_sam_mapping')
+        if launch_info:
+            pkg, launch = launch_info
+            extra_args = []
+            if self.chkUseSimTime.isChecked():
+                extra_args.append('use_sim_time:=true')
+
+            if self.node.start_launch_file('lio_sam_mapping', pkg, launch,
+                                           extra_args=' '.join(extra_args) if extra_args else None):
+                self.log("LIO-SAM Mapping started")
+                self.update_button_states()
+        else:
+            self.log("LIO-SAM mapping launch file not found!")
+            QMessageBox.warning(self, "Error", "LIO-SAM mapping launch file not found!\n\nInstall livox_lio_sam package.")
+
+    def on_stop_liosam_mapping(self):
+        """Stop LIO-SAM SLAM mapping"""
+        if self.node.stop_launch_file('lio_sam_mapping'):
+            self.log("LIO-SAM Mapping stopped")
+            self.update_button_states()
+
+    def on_browse_liosam_map(self):
+        """Browse for LIO-SAM PCD map file"""
+        default_path = str(self.workspace_path / "maps" / "lio_sam")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select LIO-SAM Global Map (.pcd)",
+            default_path,
+            "PCD Files (*.pcd);;All Files (*)"
+        )
+        if file_path:
+            self.txtLioSamMapPath.setText(file_path)
+            self.log(f"LIO-SAM map selected: {file_path}")
+
+    def on_start_liosam_loc(self):
+        """Start LIO-SAM localization"""
+        launch_info = self.node.launch_files.get('lio_sam_loc')
+        if launch_info:
+            pkg, launch = launch_info
+            map_path = self.txtLioSamMapPath.text()
+
+            if not map_path.endswith('.pcd'):
+                self.log(f"Invalid map path: {map_path}")
+                QMessageBox.warning(self, "Error", "Please select a .pcd file.")
+                return
+
+            if not os.path.exists(map_path):
+                self.log(f"Map file not found: {map_path}")
+                QMessageBox.warning(self, "Error", f"Map file not found:\n{map_path}")
+                return
+
+            extra_args = []
+            if self.chkUseSimTime.isChecked():
+                extra_args.append('use_sim_time:=true')
+            extra_args.append(f'global_map_path:={map_path}')
+
+            if self.node.start_launch_file('lio_sam_loc', pkg, launch,
+                                           extra_args=' '.join(extra_args) if extra_args else None):
+                self.log(f"LIO-SAM Localization started with map: {map_path}")
+                self.update_button_states()
+        else:
+            self.log("LIO-SAM localization launch file not found!")
+            QMessageBox.warning(self, "Error", "LIO-SAM localization launch file not found!")
+
+    def on_stop_liosam_loc(self):
+        """Stop LIO-SAM localization"""
+        if self.node.stop_launch_file('lio_sam_loc'):
+            self.log("LIO-SAM Localization stopped")
+            self.update_button_states()
+
+    # ==================== RTAB-Map 3D LiDAR Tab ====================
+
+    def on_start_3dlidar_mapping(self):
+        """Start RTAB-Map 3D LiDAR only mapping"""
+        launch_info = self.node.launch_files.get('rtabmap_3dlidar_mapping')
+        if launch_info:
+            pkg, launch = launch_info
+            extra_args = []
+            if self.chkUseSimTime.isChecked():
+                extra_args.append('use_sim_time:=true')
+            if self.chkRviz.isChecked():
+                extra_args.append('rviz:=true')
+            else:
+                extra_args.append('rviz:=false')
+
+            if self.node.start_launch_file('rtabmap_3dlidar_mapping', pkg, launch,
+                                           extra_args=' '.join(extra_args) if extra_args else None):
+                self.log("RTAB-Map 3D LiDAR Mapping started")
+                self.update_button_states()
+        else:
+            self.log("RTAB-Map 3D LiDAR mapping launch file not found!")
+            QMessageBox.warning(self, "Error", "RTAB-Map 3D LiDAR mapping launch file not found!")
+
+    def on_stop_3dlidar_mapping(self):
+        """Stop RTAB-Map 3D LiDAR only mapping"""
+        if self.node.stop_launch_file('rtabmap_3dlidar_mapping'):
+            self.log("RTAB-Map 3D LiDAR Mapping stopped")
+            self.update_button_states()
+
+    def on_save_3dlidar_map(self):
+        """Save RTAB-Map 3D LiDAR map"""
+        self._save_rtabmap_db("3dlidar")
+
+    def on_browse_3dlidar_map(self):
+        """Browse for RTAB-Map 3D LiDAR map file"""
+        default_path = str(self.workspace_path / "maps" / "rtabmap_3d")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select RTAB-Map Database (.db)",
+            default_path,
+            "Database Files (*.db);;All Files (*)"
+        )
+        if file_path:
+            self.txt3dLidarMapPath.setText(file_path)
+            self.log(f"3D LiDAR map selected: {file_path}")
+
+    def on_start_3dlidar_loc(self):
+        """Start RTAB-Map 3D LiDAR only localization"""
+        launch_info = self.node.launch_files.get('rtabmap_3dlidar_loc')
+        if launch_info:
+            pkg, launch = launch_info
+            map_path = self.txt3dLidarMapPath.text()
+
+            if not self._validate_map_path(map_path):
+                return
+
+            extra_args = []
+            if self.chkUseSimTime.isChecked():
+                extra_args.append('use_sim_time:=true')
+            if self.chkRviz.isChecked():
+                extra_args.append('rviz:=true')
+            else:
+                extra_args.append('rviz:=false')
+
+            self._prepare_map_for_localization(map_path)
+
+            if self.node.start_launch_file('rtabmap_3dlidar_loc', pkg, launch,
+                                           extra_args=' '.join(extra_args) if extra_args else None):
+                self.log(f"RTAB-Map 3D LiDAR Localization started with map: {map_path}")
+                self.update_button_states()
+        else:
+            self.log("RTAB-Map 3D LiDAR localization launch file not found!")
+            QMessageBox.warning(self, "Error", "RTAB-Map 3D LiDAR localization launch file not found!")
+
+    def on_stop_3dlidar_loc(self):
+        """Stop RTAB-Map 3D LiDAR only localization"""
+        if self.node.stop_launch_file('rtabmap_3dlidar_loc'):
+            self.log("RTAB-Map 3D LiDAR Localization stopped")
+            self.update_button_states()
+
     # ==================== Helper Methods ====================
 
     def _validate_map_path(self, map_path):
@@ -757,6 +960,52 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             self.btnStartRgbdLidarLoc.setStyleSheet(style_running)
         else:
             self.btnStartRgbdLidarLoc.setStyleSheet(style_loc)
+
+        # LIO-SAM
+        liosam_mapping_running = self.node.is_process_running('lio_sam_mapping')
+        liosam_loc_running = self.node.is_process_running('lio_sam_loc')
+
+        liosam_mapping_configured = self.node.launch_files.get('lio_sam_mapping') is not None
+        self.btnStartLioSamMapping.setEnabled(
+            liosam_mapping_configured and not liosam_mapping_running and not liosam_loc_running)
+        self.btnStopLioSamMapping.setEnabled(liosam_mapping_running)
+        if liosam_mapping_running:
+            self.btnStartLioSamMapping.setStyleSheet(style_running)
+        else:
+            self.btnStartLioSamMapping.setStyleSheet(style_ready)
+
+        liosam_loc_configured = self.node.launch_files.get('lio_sam_loc') is not None
+        self.btnStartLioSamLoc.setEnabled(
+            liosam_loc_configured and not liosam_loc_running and not liosam_mapping_running)
+        self.btnStopLioSamLoc.setEnabled(liosam_loc_running)
+        if liosam_loc_running:
+            self.btnStartLioSamLoc.setStyleSheet(style_running)
+        else:
+            self.btnStartLioSamLoc.setStyleSheet(style_loc)
+
+        # RTAB-Map 3D LiDAR
+        rtabmap_3dlidar_mapping_running = self.node.is_process_running('rtabmap_3dlidar_mapping')
+        rtabmap_3dlidar_loc_running = self.node.is_process_running('rtabmap_3dlidar_loc')
+
+        rtabmap_3dlidar_mapping_configured = self.node.launch_files.get('rtabmap_3dlidar_mapping') is not None
+        self.btnStart3dLidarMapping.setEnabled(
+            rtabmap_3dlidar_mapping_configured and not rtabmap_3dlidar_mapping_running and not rtabmap_3dlidar_loc_running)
+        self.btnStop3dLidarMapping.setEnabled(rtabmap_3dlidar_mapping_running)
+        self.btnSave3dLidarMap.setEnabled(rtabmap_3dlidar_mapping_running)
+        if rtabmap_3dlidar_mapping_running:
+            self.btnStart3dLidarMapping.setStyleSheet(style_running)
+        else:
+            self.btnStart3dLidarMapping.setStyleSheet(style_ready)
+        self.btnSave3dLidarMap.setStyleSheet(style_save)
+
+        rtabmap_3dlidar_loc_configured = self.node.launch_files.get('rtabmap_3dlidar_loc') is not None
+        self.btnStart3dLidarLoc.setEnabled(
+            rtabmap_3dlidar_loc_configured and not rtabmap_3dlidar_loc_running and not rtabmap_3dlidar_mapping_running)
+        self.btnStop3dLidarLoc.setEnabled(rtabmap_3dlidar_loc_running)
+        if rtabmap_3dlidar_loc_running:
+            self.btnStart3dLidarLoc.setStyleSheet(style_running)
+        else:
+            self.btnStart3dLidarLoc.setStyleSheet(style_loc)
 
         # ROS Bag
         self._update_bag_button_states()

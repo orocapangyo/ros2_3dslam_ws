@@ -53,7 +53,7 @@ def generate_launch_description():
         namespace='rtabmap',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'frame_id': 'base_link',
+            'frame_id': 'base_footprint',
             'odom_frame_id': 'odom',
             'publish_tf': True,
             'wait_for_transform': 0.2,
@@ -86,7 +86,7 @@ def generate_launch_description():
         namespace='rtabmap',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'frame_id': 'base_link',
+            'frame_id': 'base_footprint',
             'odom_frame_id': 'odom',
             'map_frame_id': 'map',
             'subscribe_depth': True,

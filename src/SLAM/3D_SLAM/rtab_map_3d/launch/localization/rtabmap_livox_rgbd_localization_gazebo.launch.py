@@ -76,8 +76,8 @@ def generate_launch_description():
         namespace='rtabmap',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'frame_id': 'base_link',
-            'odom_frame_id': 'odom',
+            'frame_id': 'base_footprint',
+            'odom_frame_id': 'odom_rtabmap',
             'publish_tf': True,
             'wait_for_transform': 1.0,
             'approx_sync': True,
@@ -100,7 +100,7 @@ def generate_launch_description():
             # QoS: BEST_EFFORT to match Gazebo bridge output
             'qos_scan_cloud': 2,
         }],
-        remappings=[('scan_cloud', '/livox/lidar')],
+        remappings=[('scan_cloud', '/scan/points')],
         output='screen'
     )
 
@@ -112,8 +112,8 @@ def generate_launch_description():
         namespace='rtabmap',
         parameters=[{'database_path': database_path}, {
             'use_sim_time': use_sim_time,
-            'frame_id': 'base_link',
-            'odom_frame_id': 'odom',
+            'frame_id': 'base_footprint',
+            'odom_frame_id': 'odom_rtabmap',
             'map_frame_id': 'map',
             # 센서 구독 설정
             'subscribe_depth': True,
@@ -185,6 +185,9 @@ def generate_launch_description():
             'voxel_size': 0.02,
             'approx_sync': True,
             'queue_size': 10,
+            # QoS: BEST_EFFORT to match Gazebo bridge output
+            'qos_image': 2,
+            'qos_camera_info': 2,
         }],
         remappings=[
             ('rgb/image', '/camera/color/image_raw'),

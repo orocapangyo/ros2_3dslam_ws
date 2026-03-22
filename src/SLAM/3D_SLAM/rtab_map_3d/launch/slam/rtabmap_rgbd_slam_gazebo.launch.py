@@ -39,8 +39,8 @@ def generate_launch_description():
 
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='false',
-        description='Use simulation time'
+        default_value='true',
+        description='Use simulation time (default true for Gazebo)'
     )
 
     rviz_arg = DeclareLaunchArgument(
@@ -82,7 +82,7 @@ def generate_launch_description():
             ('rgb/image', '/camera/color/image_raw'),
             ('rgb/camera_info', '/camera/color/camera_info'),
             ('depth/image', '/camera/depth/image_raw'),
-            ('depth/camera_info', '/camera/color/camera_info'),
+            ('depth/camera_info', '/camera/depth/camera_info'),
         ],
         output='screen'
     )
@@ -138,7 +138,7 @@ def generate_launch_description():
             ('rgb/image', '/camera/color/image_raw'),
             ('rgb/camera_info', '/camera/color/camera_info'),
             ('depth/image', '/camera/depth/image_raw'),
-            ('depth/camera_info', '/camera/color/camera_info'),
+            ('depth/camera_info', '/camera/depth/camera_info'),
         ],
         arguments=['-d'],  # Delete database on start (mapping mode)
         output='screen'
