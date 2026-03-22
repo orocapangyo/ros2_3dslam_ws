@@ -55,7 +55,11 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         self.bag_duration = 0.0
         self.bag_start_time = None
 
-        # Connect buttons - Data Source tab
+        # Connect buttons - Data Source tab (Gazebo)
+        self.btnStartGazebo.clicked.connect(self.on_start_gazebo)
+        self.btnStopGazebo.clicked.connect(self.on_stop_gazebo)
+
+        # Connect buttons - Data Source tab (Orbbec)
         self.btnStartOrbbec.clicked.connect(self.on_start_orbbec)
         self.btnStopOrbbec.clicked.connect(self.on_stop_orbbec)
         self.btnBrowseBag.clicked.connect(self.on_browse_bag)
@@ -189,6 +193,7 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             self.log("Gazebo detected - using simulation launch files")
             # Gazebo simulation launch files (*_gazebo.launch.py)
             launch_config = {
+                'gazebo': ('tm_gazebo', 'gazebo.launch.py'),
                 'orbbec_camera': ('orbbec_camera', 'astra_pro.launch.py'),  # Not used in Gazebo
                 'rgbd_mapping': ('rtab_map_3d_config', 'rtabmap_rgbd_gazebo.launch.py'),
                 'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_loc_gazebo.launch.py'),
@@ -286,6 +291,27 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         self.update_3dlidar_position(x, y, z, roll, pitch, yaw)
 
     # ==================== Data Source Tab ====================
+
+    def on_start_gazebo(self):
+        """Start Gazebo simulation"""
+        launch_info = self.node.launch_files.get('gazebo')
+        if launch_info:
+            pkg, launch = launch_info
+            extra_args = ['odom_tf:=false']
+            if self.node.start_launch_file('gazebo', pkg, launch,
+                                           extra_args=' '.join(extra_args)):
+                self.log("Gazebo simulation started (odom TF disabled for SLAM)")
+                self.chkUseSimTime.setChecked(True)
+                self.update_button_states()
+        else:
+            self.log("Gazebo package (tm_gazebo) not found!")
+            QMessageBox.warning(self, "Error", "Gazebo package (tm_gazebo) not found!")
+
+    def on_stop_gazebo(self):
+        """Stop Gazebo simulation"""
+        if self.node.stop_launch_file('gazebo'):
+            self.log("Gazebo simulation stopped")
+            self.update_button_states()
 
     def on_start_orbbec(self):
         """Start Orbbec camera"""
@@ -901,11 +927,23 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         style_save = "background-color: #FF9800; color: white; font-weight: bold; padding: 10px;"
 
         # Check running states
+        gazebo_running = self.node.is_process_running('gazebo')
         orbbec_running = self.node.is_process_running('orbbec_camera')
         rgbd_mapping_running = self.node.is_process_running('rgbd_mapping')
         rgbd_loc_running = self.node.is_process_running('rgbd_loc')
         rgbd_lidar_mapping_running = self.node.is_process_running('rgbd_lidar_mapping')
         rgbd_lidar_loc_running = self.node.is_process_running('rgbd_lidar_loc')
+
+        # Gazebo Simulation
+        gazebo_configured = self.node.launch_files.get('gazebo') is not None
+        self.btnStartGazebo.setEnabled(gazebo_configured and not gazebo_running)
+        self.btnStopGazebo.setEnabled(gazebo_running)
+        if gazebo_running:
+            self.lblGazeboStatus.setText("Status: Running")
+            self.btnStartGazebo.setStyleSheet(style_running)
+        else:
+            self.lblGazeboStatus.setText("Status: Stopped")
+            self.btnStartGazebo.setStyleSheet(style_ready)
 
         # Orbbec Camera
         self.btnStartOrbbec.setEnabled(not orbbec_running)

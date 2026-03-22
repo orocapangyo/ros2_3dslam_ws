@@ -103,6 +103,7 @@ class SlamManager3DNode(Node):
 
         # Dictionary to store running processes
         self.processes = {
+            'gazebo': None,
             'orbbec_camera': None,
             'rgbd_mapping': None,
             'rgbd_loc': None,
@@ -116,6 +117,7 @@ class SlamManager3DNode(Node):
 
         # Store launch file paths
         self.launch_files = {
+            'gazebo': None,
             'orbbec_camera': None,
             'rgbd_mapping': None,
             'rgbd_loc': None,
@@ -540,6 +542,70 @@ exec {' '.join(cmd)}
         time.sleep(0.5)
         self.get_logger().info('LIO-SAM process cleanup complete')
 
+    def _kill_gazebo_processes(self):
+        """Kill all Gazebo related processes."""
+        self.get_logger().info('Killing Gazebo related processes...')
+
+        patterns_to_kill = [
+            'ign gazebo',
+            'gz sim',
+            'parameter_bridge',
+            'odom_to_tf',
+            'rqt_robot_steering',
+        ]
+
+        for pattern in patterns_to_kill:
+            try:
+                result = subprocess.run(
+                    ['pkill', '-9', '-f', pattern],
+                    capture_output=True,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    self.get_logger().info(f'Killed: {pattern}')
+            except Exception:
+                pass
+
+        # Kill static_transform_publishers from Gazebo launch
+        try:
+            subprocess.run(
+                ['pkill', '-9', '-f', 'ros2 launch.*tm_gazebo'],
+                capture_output=True,
+                timeout=3
+            )
+        except Exception:
+            pass
+
+        # Kill RViz with gazebo config
+        try:
+            result = subprocess.run(
+                ['pgrep', '-f', 'rviz2'],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            cmdline_result = subprocess.run(
+                                ['cat', f'/proc/{pid}/cmdline'],
+                                capture_output=True,
+                                text=True,
+                                timeout=2
+                            )
+                            if 'gazebo' in cmdline_result.stdout.lower():
+                                os.kill(int(pid), signal.SIGKILL)
+                                self.get_logger().info(f'Killed Gazebo RViz PID: {pid}')
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        time.sleep(1.0)
+        self.get_logger().info('Gazebo process cleanup complete')
+
     def stop_launch_file(self, process_name):
         """Stop a running launch file process and all child processes"""
         process = self.processes.get(process_name)
@@ -626,6 +692,9 @@ exec {' '.join(cmd)}
             elif process_name in ['lio_sam_mapping', 'lio_sam_loc']:
                 self._kill_liosam_processes()
                 self.get_logger().info('Killed LIO-SAM child processes')
+            elif process_name == 'gazebo':
+                self._kill_gazebo_processes()
+                self.get_logger().info('Killed Gazebo child processes')
 
             self.processes[process_name] = None
             self.get_logger().info(f'{process_name} stopped')

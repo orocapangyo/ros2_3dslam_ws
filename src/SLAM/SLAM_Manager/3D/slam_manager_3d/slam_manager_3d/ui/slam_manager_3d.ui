@@ -84,6 +84,84 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
+         <widget class="QGroupBox" name="groupGazebo">
+          <property name="title">
+           <string>Gazebo Simulation</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_gazebo">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_gazebo">
+             <item>
+              <widget class="QPushButton" name="btnStartGazebo">
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Start Gazebo</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: #4CAF50; color: white; font-weight: bold; padding: 10px;</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnStopGazebo">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Stop Gazebo</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">padding: 10px;</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_gazebo">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblGazeboStatus">
+             <property name="text">
+              <string>Status: Stopped</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblGazeboInfo">
+             <property name="text">
+              <string>* Launches Gazebo with odom TF disabled (SLAM nodes provide odometry)</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">font-style: italic; color: #FF5722;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
          <widget class="QGroupBox" name="groupOrbbec">
           <property name="title">
            <string>Orbbec Camera</string>
