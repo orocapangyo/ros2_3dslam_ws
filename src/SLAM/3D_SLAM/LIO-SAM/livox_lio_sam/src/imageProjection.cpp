@@ -289,6 +289,27 @@ public:
         if (sensor == SensorType::VELODYNE)
         {
             pcl::moveFromROSMsg(currentCloudMsg, *laserCloudIn);
+
+            // Generate synthetic per-point timestamps when time field is missing
+            // (e.g., Gazebo simulation LiDAR bridge does not provide per-point timestamps)
+            bool hasTimeField = false;
+            for (const auto &field : currentCloudMsg.fields) {
+                if (field.name == "time" || field.name == "t") {
+                    hasTimeField = true;
+                    break;
+                }
+            }
+            if (!hasTimeField && !laserCloudIn->empty()) {
+                float scanPeriod = 0.1f; // 10 Hz LiDAR rotation period
+                int cloudSize = laserCloudIn->size();
+                for (int i = 0; i < cloudSize; i++) {
+                    laserCloudIn->points[i].time = static_cast<float>(i) / cloudSize * scanPeriod;
+                }
+                if (deskewFlag == 0) {
+                    deskewFlag = 1;
+                    RCLCPP_INFO(get_logger(), "Synthetic timestamps generated for deskew (no per-point time field detected)");
+                }
+            }
         }
         else if (sensor == SensorType::OUSTER)
         {

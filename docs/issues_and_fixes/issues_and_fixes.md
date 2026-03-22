@@ -388,3 +388,374 @@ Node(..., parameters=[parameter_file, {'savePCDDirectory': save_pcd_dir}])
 **수정 파일:**
 - `config/params_slam_gazebo.yaml`, `config/params_localization_gazebo.yaml`
 - `launch/slam/run_slam_gazebo.launch.py`
+
+---
+
+### [NEW] RTAB-Map 3D: 3개 센서 조합 Gazebo launch 파일 추가
+
+**내용:** 기존 Livox 전용(`/livox/lidar`) 파일 외에 Gazebo 범용 3D LiDAR(`/scan/points`) 기반 launch 파일 6개 추가.
+
+**센서 조합:**
+
+| 조합 | SLAM | Localization |
+|------|------|--------------|
+| 3D LiDAR + RGBD | `rtabmap_3dlidar_rgbd_slam_gazebo.launch.py` | `rtabmap_3dlidar_rgbd_localization_gazebo.launch.py` |
+| 3D LiDAR only | `rtabmap_3dlidar_only_slam_gazebo.launch.py` | `rtabmap_3dlidar_only_localization_gazebo.launch.py` |
+| 3D LiDAR + RGB | `rtabmap_3dlidar_rgb_slam_gazebo.launch.py` | `rtabmap_3dlidar_rgb_localization_gazebo.launch.py` |
+
+**핵심 설계:**
+- `frame_id: base_footprint`, `odom_frame_id: odom_rtabmap`
+- ICP odom과 SLAM 노드 모두 `/scan/points` 사용 (기존 livox 파일의 토픽 불일치 버그 방지)
+- RGBD 변형: `point_cloud_xyzrgb` + `point_cloud_assembler` + `TimerAction` RViz
+- `Reg/Strategy`: RGBD/RGB = 2 (ICP+Visual), LiDAR-only = 1 (ICP only)
+- Localization: `database_path` 인수, `Mem/IncrementalMemory: false`, `Optimizer/Robust: true`
+
+**추가 수정:**
+- `package.xml`: `<exec_depend>rtabmap_util</exec_depend>` 추가
+- `docs/rtab_map_3d_run_commands.md`: 6개 새 명령어 추가
+
+---
+
+### [FIX] RTAB-Map 3D CMakeLists.txt: rviz2 디렉토리 참조 누락
+
+**증상:** `colcon build --packages-select rtab_map_3d_config` 실패
+
+```
+CMake Error: ament_cmake_symlink_install_directory() can't find
+  '.../rtab_map_3d/rviz'
+```
+
+**원인:** `rviz/` → `rviz2/` 폴더명 변경 후 CMakeLists.txt 미수정
+
+```cmake
+# 수정 전
+install(DIRECTORY rviz DESTINATION share/${PROJECT_NAME})
+
+# 수정 후
+install(DIRECTORY rviz2 DESTINATION share/${PROJECT_NAME})
+```
+
+**수정 파일:** `src/SLAM/3D_SLAM/rtab_map_3d/CMakeLists.txt`
+
+---
+
+### [NOTE] RTAB-Map Localization: loadWordsQuery 시각 단어 사전 경고
+
+**증상:** Localization 모드에서 DB 로드 시 에러 로그 발생
+
+```
+[ERROR] DBDriverSqlite3.cpp:3858::loadWordsQuery() Query (5459) doesn't match loaded words (0)
+[ERROR] VWDictionary.cpp:741::addWordRef() Not found word 1 (dict size=0)
+```
+
+**원인:** 짧은 SLAM 세션(~10초 주행)에서 시각 단어 사전(BoW vocabulary)이 충분히 형성되지 않은 상태로 DB 저장. Localization 시 사전 로드 실패.
+
+**심각도:** 비치명적. ICP 기반 localization은 정상 동작. 시각적 루프 클로저만 비활성화.
+
+**해결:** 더 긴 SLAM 매핑 세션 (1분+ 주행)에서 DB 저장 시 해소됨.
+
+---
+
+### [TEST] RTAB-Map 3D: 6개 launch 파일 Gazebo 통합 테스트 결과
+
+**테스트 환경:** Gazebo Ignition Fortress + Pioneer2dx + `gazebo_no_odom.launch.py odom_tf:=false`
+
+| 테스트 | 결과 | 비고 |
+|--------|------|------|
+| TF 트리 검증 | **PASS** | `base_footprint→base_link` z=0.16 |
+| 센서 토픽/QoS | **PASS** | 7/7 토픽, RELIABLE QoS, depth frame_id 호환 |
+| LiDAR only SLAM | **PASS** | DB 9.3MB |
+| LiDAR+RGB SLAM | **PASS** | DB 12MB |
+| LiDAR+RGBD SLAM | **PASS** | DB 68MB, 4노드, 컬러클라우드 |
+| LiDAR only Localization | **PASS** | DB 로드 + TF 정상 |
+| LiDAR+RGB Localization | **PASS** | 시각 단어 경고 (비치명적) |
+| LiDAR+RGBD Localization | **PASS** | 4노드 + 컬러클라우드 |
+| Gazebo 없이 SLAM | **PASS** | 크래시 없음 |
+| 잘못된 DB 경로 | **PASS** | 명확한 FATAL 에러 후 종료 |
+
+**Gazebo QoS 발견:** `/scan/points` 등 센서 토픽은 `RELIABLE` QoS로 발행됨 (기존 문서는 `BEST_EFFORT` 가정). RTAB-Map의 `qos_scan_cloud: 2` (BEST_EFFORT) subscriber는 RELIABLE publisher와 호환되므로 문제 없음.
+
+**DB 크기 비교:** LiDAR-only (9.3MB) < LiDAR+RGB (12MB) < LiDAR+RGBD (68MB) — 센서 데이터 양에 비례
+
+---
+
+### [BUG] RTAB-Map 3D: 8개 Gazebo SLAM launch 파일 전수 검사 결과
+
+**테스트 환경:** Gazebo Ignition Fortress + Pioneer2dx + `gazebo_no_odom.launch.py`
+
+**테스트 대상:** `rtab_map_3d_config` 패키지의 Gazebo SLAM launch 파일 8개
+
+| # | Launch File | 결과 | 발견된 이슈 |
+|---|------------|------|------------|
+| 1 | rtabmap_rgbd_slam_gazebo | **FAIL** | use_sim_time=false, depth_info remap |
+| 2 | rtabmap_2dlidar_rgbd_slam_gazebo | **WARN** | depth_info remap |
+| 3 | rtabmap_3dlidar_only_slam_gazebo | **PASS** | — |
+| 4 | rtabmap_3dlidar_rgb_slam_gazebo | **PASS** | — |
+| 5 | rtabmap_3dlidar_rgbd_slam_gazebo | **PASS** | — |
+| 6 | rtabmap_livox_rgbd_slam_gazebo | **FAIL** | TF 충돌, 토픽 불일치, QoS 누락 |
+| 7 | rtabmap_3d_slam_gazebo | **PASS** | — |
+| 8 | rtabmap_astra_3d_slam_gazebo | **FAIL** | TF 충돌 |
+
+---
+
+#### Bug 1: use_sim_time 기본값 오류 (심각도: 높음)
+
+**파일:** `launch/slam/rtabmap_rgbd_slam_gazebo.launch.py:42`
+
+**증상:** 실행 시 `"Odometry: Detected not valid consecutive stamps (previous=27599s new=34s)"` 에러 반복. 타임스탬프 27599초(Gazebo sim time)와 34초(system wall clock)가 혼재.
+
+**원인:** `use_sim_time` 기본값이 `false` — 다른 모든 Gazebo launch 파일은 `true`
+
+```python
+# 수정 전 (버그)
+default_value='false',
+
+# 수정 필요
+default_value='true',
+```
+
+**영향:** 모든 노드가 system clock 사용 → TF 시간 불일치 → odometry 데이터 동기화 실패
+
+---
+
+#### Bug 2: TF 부모 프레임 충돌 — base_link (심각도: 높음)
+
+**파일:**
+- `launch/slam/rtabmap_livox_rgbd_slam_gazebo.launch.py:74,112`
+- `launch/slam/rtabmap_astra_3d_slam_gazebo.launch.py:56,89`
+
+**증상:** Odometry가 `odom → base_link` TF 발행 시도. Gazebo static TF `base_footprint → base_link`과 parent 충돌.
+
+```
+충돌 구조 (Cartographer 3D와 동일한 패턴):
+  Gazebo Static TF:  base_footprint → base_link  (항상 발행)
+  RGBD/ICP Odom:     odom → base_link            (frame_id='base_link')
+                     ↑ base_link에 부모가 2개 → TF2가 odom TF 무시
+```
+
+**런타임 증거 (Livox):**
+```
+[icp_odometry] Odometry: frame_id = base_link
+[icp_odometry] Odometry: odom_frame_id = odom
+[icp_odometry] TF odom->base_link is not published because we detected a time jump
+```
+
+**해결 방향:** `frame_id`를 `base_footprint`로 변경 (3dlidar 시리즈와 동일하게)
+
+```python
+# 수정 전 (TF 충돌)
+'frame_id': 'base_link',
+'odom_frame_id': 'odom',
+
+# 수정 후 (정상)
+'frame_id': 'base_footprint',
+'odom_frame_id': 'odom_rtabmap',  # 또는 'odom' (gazebo_no_odom 사용 시)
+```
+
+**기존 사례:** Cartographer 3D에서 `published_frame = "base_link"` → `"base_footprint"` 변경으로 동일 문제 해결 (이 문서 2026-03-15 참조)
+
+---
+
+#### Bug 3: Livox scan_cloud 토픽 불일치 (심각도: 높음)
+
+**파일:** `launch/slam/rtabmap_livox_rgbd_slam_gazebo.launch.py`
+
+**증상:** SLAM 노드가 LiDAR 데이터를 수신하지 못함. `ros2 topic info /livox/lidar` → Publisher 0개, Subscriber 1개.
+
+**원인:** 동일 launch 파일 내 ICP odom과 SLAM 노드가 서로 다른 토픽 사용
+
+```python
+# ICP Odometry (L99) — 정상
+remappings=[('scan_cloud', '/scan/points')],  # Gazebo가 발행하는 토픽
+
+# RTAB-Map SLAM (L155) — 버그
+remappings=[
+    ('scan_cloud', '/livox/lidar'),  # Gazebo는 이 토픽 미발행!
+]
+```
+
+**런타임 증거:**
+```
+$ ros2 topic info /livox/lidar
+Publisher count: 0     ← 데이터 소스 없음
+Subscription count: 1  ← SLAM 노드만 대기 중
+
+$ ros2 topic info /scan/points
+Publisher count: 2     ← Gazebo bridge 정상 발행
+Subscription count: 2  ← ICP odom만 수신
+```
+
+**해결:** SLAM 노드 remapping을 `/scan/points`로 변경
+
+```python
+# 수정
+('scan_cloud', '/scan/points'),
+```
+
+---
+
+#### Bug 4: Livox point_cloud_xyzrgb QoS 누락 (심각도: 중간)
+
+**파일:** `launch/slam/rtabmap_livox_rgbd_slam_gazebo.launch.py:174-181`
+
+**원인:** `point_cloud_xyzrgb` 노드에 Gazebo bridge QoS 설정 누락
+
+```python
+# 현재 (QoS 미설정 → 기본 RELIABLE)
+parameters=[{
+    'use_sim_time': use_sim_time,
+    'decimation': 4,
+    'max_depth': 4.0,
+    'voxel_size': 0.02,
+    'approx_sync': True,
+    'queue_size': 10,
+}],
+
+# 수정 필요 (3dlidar_rgbd 파일 참조, L162-164)
+'qos_image': 2,        # BEST_EFFORT
+'qos_camera_info': 2,  # BEST_EFFORT
+```
+
+**영향:** Gazebo bridge 카메라 토픽 수신 불가 → 컬러 포인트 클라우드 미생성
+
+---
+
+#### Note 1: depth/camera_info remapping 불일치 (심각도: 낮음)
+
+**파일:**
+- `launch/slam/rtabmap_rgbd_slam_gazebo.launch.py:85`
+- `launch/slam/rtabmap_2dlidar_rgbd_slam_gazebo.launch.py:84`
+
+**내용:** `depth/camera_info`를 `/camera/color/camera_info`로 remap (color 카메라 info를 depth info로 사용)
+
+```python
+# 현재 (2개 파일)
+('depth/camera_info', '/camera/color/camera_info'),
+
+# 3D LiDAR+RGBD 파일들은 올바르게:
+('depth/camera_info', '/camera/depth/camera_info'),
+```
+
+**영향:** Gazebo에서 color/depth camera_info가 동일한 카메라 모델이면 실질적 차이 없음. 실제 하드웨어(다른 해상도/intrinsics)에서는 문제 발생 가능.
+
+---
+
+#### Note 2: queue_size 파라미터 deprecation (심각도: 낮음)
+
+**증상:** 전체 launch 파일에서 경고 발생
+
+```
+Parameter "queue_size" has been renamed to "sync_queue_size" and will be removed in future versions!
+```
+
+**해결:** 향후 rtabmap 업데이트 시 파라미터명 일괄 변경 필요 (`queue_size` → `sync_queue_size`)
+
+---
+
+## 2026-03-22
+
+### [TEST] LIO-SAM Localization Mode: Gazebo 통합 테스트 결과
+
+**테스트 환경:** Gazebo Ignition Fortress + Pioneer2dx + `gazebo_no_odom.launch.py`
+
+**테스트 명령:**
+```bash
+ros2 launch livox_lio_sam run_localization_gazebo.launch.py
+```
+
+**사전 조건:** SLAM 모드에서 생성된 맵 파일이 `~/Study/ros2_3dslam_ws/maps/lio_sam/`에 존재
+
+| 항목 | 결과 | 비고 |
+|------|------|------|
+| 맵 로딩 | **PASS** | Corner: 2684, Surf: 11721, Viz: 11896 points |
+| 노드 기동 | **PASS** | 4개 노드 + RViz + static_transform_publisher 정상 기동 |
+| Odometry 발행 | **PASS** | `/lio_sam/mapping/odometry` ~3-5 Hz 발행 |
+| TF (map→base_link) | **PASS** | 변환 발행 중, 단 불안정 |
+| Global Map 시각화 | **PASS** | 기동 직후 `/lio_sam/mapping/map_global` 발행 |
+| RViz Odometry 표시 | **FAIL** | QoS 불일치로 표시 불가 |
+| Pose 안정성 | **FAIL** | deskew 비활성화로 인한 심한 드리프트 |
+
+---
+
+#### Bug 1: PCD 파일명 불일치 — save_map vs auto-save (심각도: 중간)
+
+**증상:** Localization 모드 시작 시 `CornerMap.pcd`, `SurfMap.pcd` 파일을 찾지 못함 (fallback으로 `GlobalMap.pcd` 시도)
+
+**원인:** `mapOptmization.cpp`에 두 가지 맵 저장 경로가 존재하며, 파일명이 다름
+
+| 저장 방식 | 코드 위치 | 파일명 | 형식 |
+|-----------|----------|--------|------|
+| `/lio_sam/save_map` 서비스 | L217-255 | `GlobalMap.pcd`, `CornerMap.pcd`, `SurfMap.pcd` | Binary |
+| Ctrl+C 종료 시 auto-save | L605-625 | `cloudGlobal.pcd`, `cloudCorner.pcd`, `cloudSurf.pcd` | ASCII |
+
+`loadGlobalMap()` (L343-347)은 서비스 방식의 파일명(`CornerMap.pcd`, `SurfMap.pcd`)을 기대함.
+
+**해결:** SLAM 모드에서 맵 저장 시 반드시 서비스 호출 사용:
+```bash
+ros2 service call /lio_sam/save_map livox_lio_sam/srv/SaveMap "{resolution: 0.2, destination: ''}"
+```
+
+또는 auto-save 파일을 수동 복사:
+```bash
+cd ~/Study/ros2_3dslam_ws/maps/lio_sam/
+cp cloudGlobal.pcd GlobalMap.pcd
+cp cloudCorner.pcd CornerMap.pcd
+cp cloudSurf.pcd SurfMap.pcd
+```
+
+---
+
+#### Bug 2: QoS 불일치 — RViz에서 Odometry/Path 표시 불가 (심각도: 중간)
+
+**증상:** RViz2에서 `/lio_sam/mapping/odometry`, `/lio_sam/imu/path` 토픽 구독 실패
+
+```
+[rviz2] New publisher discovered on topic '/lio_sam/mapping/odometry', offering incompatible QoS.
+        Last incompatible policy: RELIABILITY_QOS_POLICY
+```
+
+**원인:** `utility.hpp:409-419`에서 `qos_profile`의 Reliability가 `BEST_EFFORT`로 설정. RViz2 기본 구독 QoS는 `RELIABLE`.
+
+```
+Publisher (LIO-SAM): BEST_EFFORT → RViz2 Subscriber: RELIABLE → 불일치!
+```
+
+**영향 토픽:**
+- `/lio_sam/mapping/odometry` (mapOptimization, L179)
+- `/lio_sam/imu/path` (imuPreintegration, L75)
+
+**해결 방향:** `utility.hpp`의 `qos_profile` Reliability를 `RELIABLE`로 변경하거나, RViz config에서 해당 토픽 구독 시 `Reliability: Best Effort` 설정
+
+```cpp
+// utility.hpp:412 수정 전
+RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+
+// 수정 후
+RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+```
+
+**주의:** Reliability를 RELIABLE로 변경하면 네트워크 환경에서 지연이 발생할 수 있으므로, 실제 로봇 환경에서는 BEST_EFFORT가 적합. Gazebo 시뮬레이션용으로만 변경 권장.
+
+---
+
+#### Note 1: Point cloud deskew 비활성화 (심각도: 중간)
+
+**증상:** 기동 직후 경고 발생, 이후 localization pose가 프레임마다 수 미터씩 점프
+
+```
+[imageProjection] Point cloud timestamp not available, deskew function disabled, system will drift significantly!
+```
+
+**TF echo 결과 (로봇 정지 상태):**
+```
+Translation: [0.033, 0.319, -0.282]   → (0초)
+Translation: [3.433, -1.518, -0.424]  → (2초)
+Translation: [1.640, -1.806, -0.467]  → (4초)
+Translation: [2.837, -1.738, -0.248]  → (6초)
+```
+
+**원인:** Gazebo의 3D LiDAR bridge가 PointCloud2 메시지에 per-point timestamp를 포함하지 않음. LIO-SAM의 deskew(모션 보정)가 비활성화되어 scan-to-map 매칭 품질 저하.
+
+**영향:** Localization 기능적으로는 동작하나, 실용적 수준의 정밀도 확보 불가. SLAM 모드에서도 동일 현상 발생하나 factor graph 최적화가 드리프트를 부분 보정함.
+
+**해결 방향:** Gazebo 시뮬레이션 한계. 실제 LiDAR (Velodyne/Livox)는 per-point timestamp 제공하므로 실환경에서는 문제 없음.
