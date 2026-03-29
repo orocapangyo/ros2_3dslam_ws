@@ -2,7 +2,7 @@
 <package format="3">
   <name>amr_motion_test_ui</name>
   <version>0.1.0</version>
-  <description>CLI test UI for AMR motion control action servers</description>
+  <description>CLI and GUI test UI for AMR motion control action servers</description>
   <maintainer email="user@example.com">amap</maintainer>
   <license>BSD-3-Clause</license>
 
@@ -10,6 +10,10 @@
   <exec_depend>amr_interfaces</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>python3-pyqt5</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
