@@ -57,7 +57,6 @@ def generate_launch_description():
             '/camera/points@sensor_msgs/msg/PointCloud2[ignition.msgs.PointCloudPacked',
             '/imu/data@sensor_msgs/msg/Imu[ignition.msgs.IMU',
         ],
-        parameters=[{'use_sim_time': True}],
         output='screen'
     )
 
