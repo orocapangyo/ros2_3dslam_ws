@@ -38,8 +38,8 @@ class RosBridge(QObject):
     status_received = pyqtSignal(object)   # MapperStatus
     log_received    = pyqtSignal(str)
 
-    def __init__(self, node: Node):
-        super().__init__()
+    def __init__(self, node: Node, parent=None):
+        super().__init__(parent)
         self._node = node
         self._last_log = ""
 
@@ -65,10 +65,22 @@ class RosBridge(QObject):
     def send_command(self, command: int, slam_mode: int = 0,
                      drive_mode: int = 0, map_name: str = "",
                      save_directory: str = ""):
+        if not self._cmd_client.service_is_ready():
+            self.log_received.emit("[WARN] mapper/command service not ready")
+            return
         req = MapperCommand.Request()
         req.command        = command
         req.slam_mode      = slam_mode
         req.drive_mode     = drive_mode
         req.map_name       = map_name
         req.save_directory = save_directory
-        self._cmd_client.call_async(req)
+        future = self._cmd_client.call_async(req)
+        future.add_done_callback(self._on_command_response)
+
+    def _on_command_response(self, future):
+        try:
+            result = future.result()
+            if not result.success:
+                self.log_received.emit(f"[ERROR] Command failed: {result.message}")
+        except Exception as e:
+            self.log_received.emit(f"[ERROR] Service call failed: {e}")

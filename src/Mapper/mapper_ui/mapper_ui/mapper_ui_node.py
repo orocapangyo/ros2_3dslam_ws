@@ -101,9 +101,10 @@ def main():
     executor.add_node(node)
 
     timer = QTimer()
-    timer.timeout.connect(lambda: executor.spin_once(timeout_sec=0))
+    timer.timeout.connect(lambda: executor.spin_once(timeout_sec=0.01))
     timer.start(100)  # 100ms
 
     exit_code = app.exec_()
+    timer.stop()
     rclpy.shutdown()
     sys.exit(exit_code)
