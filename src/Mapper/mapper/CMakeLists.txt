@@ -48,12 +48,18 @@ add_executable(exploration_planner_node
 ament_target_dependencies(exploration_planner_node ${DEPS})
 target_include_directories(exploration_planner_node PUBLIC include)
 
-# mapper_orchestrator_node (stub - M6 태스크가 생성)
+# mapper_orchestrator_node
+add_executable(mapper_orchestrator_node
+  src/mapper_orchestrator_node.cpp
+  src/main_orchestrator.cpp)
+ament_target_dependencies(mapper_orchestrator_node ${DEPS})
+target_include_directories(mapper_orchestrator_node PUBLIC include)
 
 install(TARGETS
   wall_aligner_node
   map_alignment_checker_node
   exploration_planner_node
+  mapper_orchestrator_node
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/ DESTINATION include)
@@ -80,6 +86,12 @@ if(BUILD_TESTING)
     src/exploration_planner_node.cpp)
   ament_target_dependencies(test_exploration_planner ${DEPS})
   target_include_directories(test_exploration_planner PUBLIC include)
+
+  ament_add_gtest(test_orchestrator_states
+    test/test_orchestrator_states.cpp
+    src/mapper_orchestrator_node.cpp)
+  ament_target_dependencies(test_orchestrator_states ${DEPS})
+  target_include_directories(test_orchestrator_states PUBLIC include)
 endif()
 
 ament_package()
