@@ -12,6 +12,9 @@ ExplorationPlannerNode::ExplorationPlannerNode(
 {
     using namespace std::placeholders;
 
+    tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
     // C1: 파라미터 선언 및 로드
     max_linear_speed_ = declare_parameter("max_linear_speed", 0.2);
     acceleration_     = declare_parameter("acceleration", 0.3);
@@ -256,17 +259,63 @@ void ExplorationPlannerNode::execute(
     auto goal     = goal_handle->get_goal();
     auto result   = std::make_shared<ExploreAction::Result>();
 
-    nav_msgs::msg::OccupancyGrid map_copy;
-    {
-        std::lock_guard<std::mutex> lock(map_mutex_);
-        if (latest_map_) map_copy = *latest_map_;
+    // [C5] Cancel check before map wait
+    if (goal_handle->is_canceling()) {
+        result->status = -3;
+        goal_handle->canceled(result);
+        return;
     }
 
-    auto segs = plan_segments(map_copy, 0.0, 0.0, goal->mode);
+    // [M3] Wait up to 5 seconds for a map
+    nav_msgs::msg::OccupancyGrid map_copy;
+    for (int i = 0; i < 50; ++i) {
+        if (goal_handle->is_canceling()) {
+            result->status = -3;
+            goal_handle->canceled(result);
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(map_mutex_);
+            if (latest_map_) { map_copy = *latest_map_; break; }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
+    // [C5] Cancel check before plan_segments
+    if (goal_handle->is_canceling()) {
+        result->status = -3;
+        goal_handle->canceled(result);
+        return;
+    }
+
+    // [M4] TF2 lookup for robot position
+    double robot_x = 0.0, robot_y = 0.0;
+    try {
+        auto tf = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
+        robot_x = tf.transform.translation.x;
+        robot_y = tf.transform.translation.y;
+    } catch (const tf2::TransformException & ex) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "TF lookup failed, using (0,0): %s", ex.what());
+    }
+    auto segs = plan_segments(map_copy, robot_x, robot_y, goal->mode);
+
+    // [C5] Cancel check after plan_segments
+    if (goal_handle->is_canceling()) {
+        result->status = -3;
+        goal_handle->canceled(result);
+        return;
+    }
+
+    // [M6] Use abort() for empty segments
     result->coverage_percent = 0.0f;
-    result->status = segs.empty() ? -1 : 0;
-    goal_handle->succeed(result);
+    if (segs.empty()) {
+        result->status = -1;
+        goal_handle->abort(result);
+    } else {
+        result->status = 0;
+        goal_handle->succeed(result);
+    }
 }
 
 }  // namespace mapper

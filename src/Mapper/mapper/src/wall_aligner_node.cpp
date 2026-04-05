@@ -18,7 +18,8 @@ WallAlignerNode::WallAlignerNode(const rclcpp::NodeOptions & options)
 
     // C1: 파라미터 선언 및 로드
     tolerance_deg_    = declare_parameter("tolerance_deg", 0.2);
-    max_iterations_   = static_cast<int>(declare_parameter("max_attempts", 5));
+    ransac_iterations_ = static_cast<int>(declare_parameter("ransac_iterations", 200));
+    max_attempts_      = static_cast<int>(declare_parameter("max_attempts", 5));
     inlier_dist_m_    = declare_parameter("inlier_dist_m", 0.05);
     min_inliers_      = static_cast<int>(declare_parameter("min_inliers", 10));
     spin_speed_deg_s_ = declare_parameter("spin_speed_deg_s", 40.0);
@@ -61,11 +62,11 @@ Line2D WallAlignerNode::detect_longest_wall(
 
     if (pts.size() < 2) return {0.0, 0};
 
-    std::mt19937 rng(42);
+    std::mt19937 rng(std::random_device{}());
     std::uniform_int_distribution<int> dist(0, (int)pts.size() - 1);
 
     Line2D best{0.0, 0};
-    for (int iter = 0; iter < max_iterations_; ++iter) {
+    for (int iter = 0; iter < ransac_iterations_; ++iter) {
         int i1 = dist(rng), i2 = dist(rng);
         if (i1 == i2) continue;
         double dx = pts[i2].first  - pts[i1].first;
@@ -88,6 +89,7 @@ Line2D WallAlignerNode::detect_longest_wall(
             best = {normalized, inliers};
         }
     }
+    if (best.inlier_count < min_inliers_) return {0.0, 0};
     return best;
 }
 
@@ -141,7 +143,7 @@ void WallAlignerNode::execute(
 
     std::atomic<bool> cancelled{false};
 
-    for (int attempt = 0; attempt < 5; ++attempt) {
+    for (int attempt = 0; attempt < max_attempts_; ++attempt) {
         if (goal_handle->is_canceling()) {
             result->status = -3;
             goal_handle->canceled(result);
@@ -180,9 +182,13 @@ void WallAlignerNode::execute(
 
         double target = robot_yaw - error;
         if (!send_spin_and_wait(target, cancelled)) {
-            result->status = cancelled.load() ? -3 : -1;
-            if (cancelled.load()) goal_handle->canceled(result);
-            else                  goal_handle->abort(result);
+            if (goal_handle->is_canceling()) {
+                result->status = -3;
+                goal_handle->canceled(result);
+            } else {
+                result->status = -1;
+                goal_handle->abort(result);
+            }
             return;
         }
     }
@@ -207,23 +213,32 @@ bool WallAlignerNode::send_spin_and_wait(
     goal.hold_steer           = false;
     goal.exit_steer_angle     = 0.0;
 
-    std::atomic<bool> done{false};
-    std::atomic<bool> success{false};
+    auto done    = std::make_shared<std::atomic<bool>>(false);
+    auto success = std::make_shared<std::atomic<bool>>(false);
 
     auto opts = rclcpp_action::Client<SpinAction>::SendGoalOptions{};
     opts.result_callback =
-        [&done, &success, &cancelled](const auto & wrapped) {
+        [done, success, &cancelled](const auto & wrapped) {
             // SpinAction: status 0=success, -1=cancelled
-            success.store(wrapped.result->status == 0);
+            success->store(wrapped.result->status == 0);
             if (wrapped.result->status == -1) cancelled.store(true);
-            done.store(true);
+            done->store(true);
         };
 
-    spin_client_->async_send_goal(goal, opts);
-    while (!done.load() && rclcpp::ok()) {
+    auto goal_handle_future = spin_client_->async_send_goal(goal, opts);
+    // wait up to 5s for goal acceptance
+    if (goal_handle_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+        RCLCPP_ERROR(get_logger(), "Spin goal send timed out");
+        return false;
+    }
+    if (!goal_handle_future.get()) {
+        RCLCPP_ERROR(get_logger(), "Spin goal was rejected");
+        return false;
+    }
+    while (!done->load() && rclcpp::ok()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    return success.load();
+    return success->load();
 }
 
 }  // namespace mapper

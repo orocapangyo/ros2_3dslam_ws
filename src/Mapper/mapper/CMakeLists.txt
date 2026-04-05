@@ -13,7 +13,6 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(mapper_interfaces REQUIRED)
@@ -22,43 +21,43 @@ find_package(waypoint_interfaces REQUIRED)
 
 set(DEPS
   rclcpp rclcpp_action sensor_msgs nav_msgs geometry_msgs
-  tf2_ros tf2_geometry_msgs tf2 mapper_interfaces
+  tf2_ros tf2 mapper_interfaces
   amr_interfaces waypoint_interfaces)
 
-# wall_aligner_node
-add_executable(wall_aligner_node
-  src/wall_aligner_node.cpp
-  src/main_wall_aligner.cpp)
-ament_target_dependencies(wall_aligner_node ${DEPS})
-target_include_directories(wall_aligner_node PUBLIC include)
+# Static libraries
+add_library(wall_aligner_lib STATIC src/wall_aligner_node.cpp)
+ament_target_dependencies(wall_aligner_lib ${DEPS})
+target_include_directories(wall_aligner_lib PUBLIC include)
 
-# map_alignment_checker_node
-add_executable(map_alignment_checker_node
-  src/map_alignment_checker_node.cpp
-  src/main_map_alignment_checker.cpp)
-ament_target_dependencies(map_alignment_checker_node ${DEPS})
-target_include_directories(map_alignment_checker_node PUBLIC include)
-target_link_libraries(map_alignment_checker_node ${OpenCV_LIBS})
+add_library(map_alignment_checker_lib STATIC src/map_alignment_checker_node.cpp)
+ament_target_dependencies(map_alignment_checker_lib ${DEPS})
+target_include_directories(map_alignment_checker_lib PUBLIC include)
+target_link_libraries(map_alignment_checker_lib ${OpenCV_LIBS})
 
-# exploration_planner_node
-add_executable(exploration_planner_node
-  src/exploration_planner_node.cpp
-  src/main_exploration_planner.cpp)
-ament_target_dependencies(exploration_planner_node ${DEPS})
-target_include_directories(exploration_planner_node PUBLIC include)
+add_library(exploration_planner_lib STATIC src/exploration_planner_node.cpp)
+ament_target_dependencies(exploration_planner_lib ${DEPS})
+target_include_directories(exploration_planner_lib PUBLIC include)
 
-# mapper_orchestrator_node
-add_executable(mapper_orchestrator_node
-  src/mapper_orchestrator_node.cpp
-  src/main_orchestrator.cpp)
-ament_target_dependencies(mapper_orchestrator_node ${DEPS})
-target_include_directories(mapper_orchestrator_node PUBLIC include)
+add_library(mapper_orchestrator_lib STATIC src/mapper_orchestrator_node.cpp)
+ament_target_dependencies(mapper_orchestrator_lib ${DEPS})
+target_include_directories(mapper_orchestrator_lib PUBLIC include)
+
+# Executables
+add_executable(wall_aligner_node src/main_wall_aligner.cpp)
+target_link_libraries(wall_aligner_node wall_aligner_lib)
+
+add_executable(map_alignment_checker_node src/main_map_alignment_checker.cpp)
+target_link_libraries(map_alignment_checker_node map_alignment_checker_lib)
+
+add_executable(exploration_planner_node src/main_exploration_planner.cpp)
+target_link_libraries(exploration_planner_node exploration_planner_lib)
+
+add_executable(mapper_orchestrator_node src/main_orchestrator.cpp)
+target_link_libraries(mapper_orchestrator_node mapper_orchestrator_lib)
 
 install(TARGETS
-  wall_aligner_node
-  map_alignment_checker_node
-  exploration_planner_node
-  mapper_orchestrator_node
+  wall_aligner_lib map_alignment_checker_lib exploration_planner_lib mapper_orchestrator_lib
+  wall_aligner_node map_alignment_checker_node exploration_planner_node mapper_orchestrator_node
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/ DESTINATION include)
@@ -67,30 +66,19 @@ install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_wall_aligner
-    test/test_wall_aligner.cpp
-    src/wall_aligner_node.cpp)
-  ament_target_dependencies(test_wall_aligner ${DEPS})
-  target_include_directories(test_wall_aligner PUBLIC include)
 
-  ament_add_gtest(test_map_alignment_checker
-    test/test_map_alignment_checker.cpp
-    src/map_alignment_checker_node.cpp)
-  ament_target_dependencies(test_map_alignment_checker ${DEPS})
-  target_include_directories(test_map_alignment_checker PUBLIC include)
-  target_link_libraries(test_map_alignment_checker ${OpenCV_LIBS})
+  ament_add_gtest(test_wall_aligner test/test_wall_aligner.cpp)
+  target_link_libraries(test_wall_aligner wall_aligner_lib)
 
-  ament_add_gtest(test_exploration_planner
-    test/test_exploration_planner.cpp
-    src/exploration_planner_node.cpp)
-  ament_target_dependencies(test_exploration_planner ${DEPS})
-  target_include_directories(test_exploration_planner PUBLIC include)
+  ament_add_gtest(test_map_alignment_checker test/test_map_alignment_checker.cpp)
+  target_link_libraries(test_map_alignment_checker map_alignment_checker_lib)
 
-  ament_add_gtest(test_orchestrator_states
-    test/test_orchestrator_states.cpp
-    src/mapper_orchestrator_node.cpp)
-  ament_target_dependencies(test_orchestrator_states ${DEPS})
-  target_include_directories(test_orchestrator_states PUBLIC include)
+  ament_add_gtest(test_exploration_planner test/test_exploration_planner.cpp)
+  target_link_libraries(test_exploration_planner exploration_planner_lib)
+
+  ament_add_gtest(test_orchestrator_states test/test_orchestrator_states.cpp)
+  target_link_libraries(test_orchestrator_states mapper_orchestrator_lib)
 endif()
 
+ament_export_include_directories(include)
 ament_package()

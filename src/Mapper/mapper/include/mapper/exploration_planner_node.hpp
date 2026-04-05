@@ -5,6 +5,8 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <mapper_interfaces/action/explore_unknown.hpp>
 #include <waypoint_interfaces/msg/segment.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -41,6 +43,9 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
     std::mutex map_mutex_;
+
+    std::shared_ptr<tf2_ros::Buffer>            tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     double max_linear_speed_{0.2};
     double acceleration_{0.3};

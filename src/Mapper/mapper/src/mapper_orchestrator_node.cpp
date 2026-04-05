@@ -13,7 +13,7 @@ MapperOrchestratorNode::MapperOrchestratorNode(
     max_align_retries_        = static_cast<int>(declare_parameter("max_align_retries", 3));
     map_stabilize_wait_sec_   = declare_parameter("map_stabilize_wait_sec", 3.0);
     loop_closure_timeout_sec_ = declare_parameter("loop_closure_timeout_sec", 30.0);
-    min_coverage_to_stop_     = static_cast<float>(declare_parameter("min_coverage_to_stop", 0.95));
+    min_coverage_to_stop_.store(static_cast<float>(declare_parameter("min_coverage_to_stop", 0.95)));
 
     status_pub_ = create_publisher<mapper_interfaces::msg::MapperStatus>(
         "mapper/status", rclcpp::QoS(10).reliable());
@@ -58,6 +58,7 @@ void MapperOrchestratorNode::transition_to_unlocked(MapperState new_state) {
 // H4: 외부 버전 (mutex 자동 획득)
 void MapperOrchestratorNode::transition_to(MapperState new_state) {
     std::lock_guard<std::mutex> lock(state_mutex_);
+    if (state_.load() == MapperState::IDLE && new_state != MapperState::IDLE) return;
     transition_to_unlocked(new_state);
 }
 
@@ -92,8 +93,8 @@ void MapperOrchestratorNode::handle_command(
     switch (req->command) {
     case Cmd::CMD_START_MAPPING:
         if (state == MapperState::IDLE) {
-            slam_mode_  = req->slam_mode;
-            drive_mode_ = req->drive_mode;
+            slam_mode_.store(req->slam_mode);
+            drive_mode_.store(req->drive_mode);
             align_retry_count_.store(0);
             transition_to_unlocked(MapperState::ALIGNING);  // H4: 이미 mutex 보유
             std::thread([self]{ self->run_aligning(); }).detach();
@@ -107,7 +108,6 @@ void MapperOrchestratorNode::handle_command(
 
     case Cmd::CMD_PAUSE:
         if (state == MapperState::MAPPING_MANUAL ||
-            state == MapperState::MAPPING_AUTO ||
             state == MapperState::EXPLORING_UNKNOWN) {
             transition_to_unlocked(MapperState::PAUSED);  // H2+H4: previous_state_ 자동 갱신
             res->success = true;
@@ -153,6 +153,11 @@ void MapperOrchestratorNode::handle_command(
             res->success = false;
             res->message = "Must be in MAPPING_MANUAL state";
         }
+        break;
+
+    case Cmd::CMD_SAVE_MAP:
+        res->success = false;
+        res->message = "CMD_SAVE_MAP not yet implemented";
         break;
 
     default:
@@ -222,7 +227,7 @@ void MapperOrchestratorNode::run_starting_slam() {
     if (state_.load() == MapperState::IDLE) return;
 
     // C2: slam_mode_에 따라 적절한 클라이언트 선택
-    auto& slam_client = (slam_mode_ == 0) ? slam_ctrl_client_2d_ : slam_ctrl_client_3d_;
+    auto& slam_client = (slam_mode_.load() == 0) ? slam_ctrl_client_2d_ : slam_ctrl_client_3d_;
 
     bool svc_ready = false;
     for (int i = 0; i < 50 && rclcpp::ok(); ++i) {
@@ -239,7 +244,7 @@ void MapperOrchestratorNode::run_starting_slam() {
 
     using SlamCtrl = mapper_interfaces::srv::SlamControl;
     auto req = std::make_shared<SlamCtrl::Request>();
-    req->command = (slam_mode_ == 0) ?
+    req->command = (slam_mode_.load() == 0) ?
         SlamCtrl::Request::CMD_START_2D :
         SlamCtrl::Request::CMD_START_3D;
 
@@ -264,8 +269,15 @@ void MapperOrchestratorNode::run_starting_slam() {
         return;
     }
 
-    std::this_thread::sleep_for(
-        std::chrono::duration<double>(map_stabilize_wait_sec_));
+    {
+        auto deadline = std::chrono::steady_clock::now() +
+            std::chrono::duration<double>(map_stabilize_wait_sec_);
+        while (std::chrono::steady_clock::now() < deadline && rclcpp::ok()) {
+            if (state_.load() == MapperState::IDLE) return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (state_.load() == MapperState::IDLE) return;
+    }
 
     transition_to(MapperState::VERIFYING_MAP);
     run_verifying_map();
@@ -313,6 +325,12 @@ void MapperOrchestratorNode::run_verifying_map() {
         transition_to(MapperState::MAPPING_MANUAL);
     } else {
         log("Map misaligned -- re-aligning");
+        total_realign_count_.fetch_add(1);
+        if (total_realign_count_.load() >= max_total_realigns_) {
+            log("Max re-alignment cycles exceeded");
+            transition_to(MapperState::ERROR);
+            return;
+        }
         align_retry_count_.store(0);  // H3: atomic store
         transition_to(MapperState::ALIGNING);
         run_aligning();
@@ -340,8 +358,8 @@ void MapperOrchestratorNode::run_exploring() {
     }
 
     mapper_interfaces::action::ExploreUnknown::Goal goal{};
-    goal.mode = drive_mode_;
-    goal.min_coverage_to_stop = min_coverage_to_stop_;
+    goal.mode = drive_mode_.load();
+    goal.min_coverage_to_stop = min_coverage_to_stop_.load();
 
     auto done = std::make_shared<std::atomic<bool>>(false);
     auto result_status = std::make_shared<std::atomic<int8_t>>(-1);
@@ -358,15 +376,15 @@ void MapperOrchestratorNode::run_exploring() {
     };
 
     explore_client_->async_send_goal(goal, opts);
-    while (!done->load() && rclcpp::ok() &&
-           state_.load() != MapperState::IDLE &&
-           state_.load() != MapperState::PAUSED) {
+    while (!done->load() && rclcpp::ok()) {
+        auto cur = state_.load();
+        if (cur == MapperState::IDLE || cur == MapperState::PAUSED) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     coverage_percent_.store(coverage->load());  // H3: atomic store
 
-    if (state_.load() == MapperState::IDLE) return;
-    if (state_.load() == MapperState::PAUSED) return;
+    auto final_state = state_.load();
+    if (final_state == MapperState::IDLE || final_state == MapperState::PAUSED) return;
 
     if (result_status->load() == 0) {
         transition_to(MapperState::LOOP_CLOSING);

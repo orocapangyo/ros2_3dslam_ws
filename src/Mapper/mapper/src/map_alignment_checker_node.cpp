@@ -1,6 +1,8 @@
 #include "mapper/map_alignment_checker_node.hpp"
 #include <thread>
 #include <cmath>
+#include <algorithm>
+#include <vector>
 
 namespace mapper {
 
@@ -52,18 +54,21 @@ double MapAlignmentCheckerNode::check_alignment(
 
     if (lines.empty()) return 0.0;
 
-    double max_error = 0.0;
+    std::vector<double> errors;
     for (auto & l : lines) {
-        double dx = l[2] - l[0];
-        double dy = l[3] - l[1];
-        double angle = std::atan2(dy, dx) * 180.0 / M_PI;
-        angle = std::fmod(angle + 180.0, 180.0);
-        double err0  = std::min(angle, 180.0 - angle);
-        double err90 = std::abs(angle - 90.0);
+        double angle_rad = std::atan2(l[3] - l[1], l[2] - l[0]);
+        double angle_deg = angle_rad * 180.0 / M_PI;
+        double normalized = std::fmod(angle_deg + 360.0, 180.0);
+        double err0  = std::min(normalized, 180.0 - normalized);
+        double err90 = std::abs(normalized - 90.0);
         double err   = std::min(err0, err90);
-        max_error = std::max(max_error, err);
+        errors.push_back(err);
     }
-    return max_error;
+    if (errors.empty()) return 0.0;
+    std::sort(errors.begin(), errors.end());
+    size_t p90_idx = static_cast<size_t>(errors.size() * 0.9);
+    if (p90_idx >= errors.size()) p90_idx = errors.size() - 1;
+    return errors[p90_idx];
 }
 
 cv::Mat MapAlignmentCheckerNode::occupancy_grid_to_mat(
@@ -77,7 +82,7 @@ cv::Mat MapAlignmentCheckerNode::occupancy_grid_to_mat(
     for (int y = 0; y < (int)map.info.height; ++y) {
         for (int x = 0; x < (int)map.info.width; ++x) {
             int8_t val = map.data[y * map.info.width + x];
-            if (val >= 50) img.at<uint8_t>(y, x) = 255;
+            if (val > 50) img.at<uint8_t>(y, x) = 255;
         }
     }
     return img;
@@ -115,6 +120,12 @@ void MapAlignmentCheckerNode::execute(
     // 최신 맵 대기 (최대 5초)
     nav_msgs::msg::OccupancyGrid map_copy;
     for (int i = 0; i < 50; ++i) {
+        if (goal_handle->is_canceling()) {
+            result->is_aligned = false;
+            result->max_wall_error_deg = -1.0;
+            goal_handle->canceled(result);
+            return;
+        }
         {
             std::lock_guard<std::mutex> lock(map_mutex_);
             if (latest_map_) { map_copy = *latest_map_; break; }
@@ -123,11 +134,17 @@ void MapAlignmentCheckerNode::execute(
     }
 
     if (map_copy.info.width == 0 || map_copy.info.height == 0) {
-        auto result = std::make_shared<mapper_interfaces::action::MapAlignmentCheck::Result>();
         result->is_aligned = false;
         result->max_wall_error_deg = -1.0;
         goal_handle->abort(result);
         RCLCPP_ERROR(get_logger(), "No map received within timeout");
+        return;
+    }
+
+    if (goal_handle->is_canceling()) {
+        result->is_aligned = false;
+        result->max_wall_error_deg = -1.0;
+        goal_handle->canceled(result);
         return;
     }
 

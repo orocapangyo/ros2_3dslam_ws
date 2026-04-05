@@ -58,4 +58,18 @@ TEST_F(OrchestratorTest, PauseRejectsWhenIdle) {
 
     EXPECT_FALSE(res->success);
     EXPECT_EQ(node->get_state(), mapper::MapperState::IDLE);
+    // Note: MAPPING_AUTO is intentionally not in the CMD_PAUSE allowed states.
+    // Autonomous mapping cannot be paused mid-run; use CMD_STOP instead.
+}
+
+TEST_F(OrchestratorTest, SaveMapReturnsNotImplemented) {
+    auto node = std::make_shared<mapper::MapperOrchestratorNode>();
+
+    auto req = std::make_shared<mapper_interfaces::srv::MapperCommand::Request>();
+    auto res = std::make_shared<mapper_interfaces::srv::MapperCommand::Response>();
+    req->command = mapper_interfaces::srv::MapperCommand::Request::CMD_SAVE_MAP;
+    node->handle_command_public(req, res);
+
+    EXPECT_FALSE(res->success);
+    EXPECT_NE(res->message.find("not yet implemented"), std::string::npos);
 }

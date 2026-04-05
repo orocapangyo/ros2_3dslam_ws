@@ -46,15 +46,18 @@ private:
     std::atomic<MapperState> previous_state_{MapperState::IDLE};
     std::mutex  state_mutex_;
     std::atomic<int>    align_retry_count_{0};
+    std::atomic<int>    total_realign_count_{0};
+    const int           max_total_realigns_{10};
     std::atomic<float>  coverage_percent_{0.0f};
     std::atomic<double> heading_error_deg_{0.0};
 
+    // set once in constructor, treated as const
     int    max_align_retries_{3};
     double map_stabilize_wait_sec_{3.0};
     double loop_closure_timeout_sec_{30.0};
-    float  min_coverage_to_stop_{0.95f};
-    uint8_t slam_mode_{0};
-    uint8_t drive_mode_{0};
+    std::atomic<float>   min_coverage_to_stop_{0.95f};
+    std::atomic<uint8_t> slam_mode_{0};
+    std::atomic<uint8_t> drive_mode_{0};
     double start_x_{0.0}, start_y_{0.0};
 
     rclcpp::Service<mapper_interfaces::srv::MapperCommand>::SharedPtr cmd_service_;
@@ -83,6 +86,7 @@ private:
     void publish_status();
     void log(const std::string & msg);
 
+    // LOCK ORDERING: state_mutex_ -> log_mutex_ (never reverse)
     mutable std::mutex log_mutex_;
     std::string log_message_;
 };

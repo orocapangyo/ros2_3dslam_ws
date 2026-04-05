@@ -40,7 +40,8 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     double tolerance_deg_{0.2};
-    int    max_iterations_{100};
+    int    ransac_iterations_{200};
+    int    max_attempts_{5};
     double inlier_dist_m_{0.05};
     int    min_inliers_{10};
     double spin_speed_deg_s_{40.0};

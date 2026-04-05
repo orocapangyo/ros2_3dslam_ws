@@ -29,6 +29,7 @@ class MapperMainWindow(QMainWindow):
         self.btn_start.clicked.connect(self._on_start)
         self.btn_pause.clicked.connect(self._on_pause)
         self.btn_resume.clicked.connect(self._on_resume)
+        self.btn_save_map.clicked.connect(self._on_save_map)
         self.btn_stop.clicked.connect(self._on_stop)
         self.btn_explore.clicked.connect(self._on_explore)
 
@@ -58,6 +59,10 @@ class MapperMainWindow(QMainWindow):
             S.STATE_MAPPING_MANUAL, S.STATE_MAPPING_AUTO,
             S.STATE_EXPLORING_UNKNOWN))
         self.btn_resume.setEnabled(state == S.STATE_PAUSED)
+        self.btn_save_map.setEnabled(state in (
+            S.STATE_MAPPING_MANUAL, S.STATE_MAPPING_AUTO,
+            S.STATE_EXPLORING_UNKNOWN, S.STATE_LOOP_CLOSING,
+            S.STATE_COMPLETED))
         self.btn_stop.setEnabled(state not in (S.STATE_IDLE, S.STATE_COMPLETED))
         self.btn_explore.setEnabled(state == S.STATE_MAPPING_MANUAL)
         for btn in [self.btn_forward, self.btn_left, self.btn_right]:
@@ -79,6 +84,9 @@ class MapperMainWindow(QMainWindow):
 
     def _on_resume(self):
         self.bridge.send_command(MapperCommand.Request.CMD_RESUME)
+
+    def _on_save_map(self):
+        self.bridge.send_command(MapperCommand.Request.CMD_SAVE_MAP)
 
     def _on_stop(self):
         self.bridge.send_command(MapperCommand.Request.CMD_STOP)

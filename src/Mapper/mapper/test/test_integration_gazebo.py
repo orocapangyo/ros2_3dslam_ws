@@ -152,6 +152,30 @@ def test_pause_resume(node: Node) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 테스트 4: CMD_SAVE_MAP stub 응답 확인
+# ---------------------------------------------------------------------------
+
+def test_save_map_stub(node: Node) -> None:
+    """CMD_SAVE_MAP returns not-implemented response"""
+    client = node.create_client(MapperCommand, 'mapper/command')
+    if not client.wait_for_service(timeout_sec=5.0):
+        raise RuntimeError("mapper/command service not available")
+    req = MapperCommand.Request()
+    req.command = MapperCommand.Request.CMD_SAVE_MAP
+    future = client.call_async(req)
+    rclpy.spin_until_future_complete(node, future, timeout_sec=5.0)
+    if not future.done():
+        raise RuntimeError("Service call timed out after 5 s (no response)")
+    res = future.result()
+    assert res is not None, "No response from CMD_SAVE_MAP"
+    assert not res.success, \
+        f"CMD_SAVE_MAP should return success=False but got success=True"
+    assert "not yet implemented" in res.message, \
+        f"Expected 'not yet implemented' in message, got: {res.message!r}"
+    print("✅ CMD_SAVE_MAP stub correctly returns not-implemented")
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -162,6 +186,7 @@ def main() -> None:
     tests = [
         ("E-STOP → IDLE",         test_estop_transitions_to_idle),
         ("PAUSE from IDLE reject", test_pause_resume),
+        ("CMD_SAVE_MAP stub",      test_save_map_stub),
         ("Full mapping flow",      test_full_mapping_flow),
     ]
 
