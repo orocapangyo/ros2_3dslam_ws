@@ -143,6 +143,7 @@ void MapperOrchestratorNode::handle_command(
 
     case Cmd::CMD_PAUSE:
         if (state == MapperState::MAPPING_MANUAL ||
+            state == MapperState::MAPPING_AUTO ||
             state == MapperState::EXPLORING_UNKNOWN) {
             transition_to_unlocked(MapperState::PAUSED);  // H2+H4: previous_state_ 자동 갱신
             res->success = true;
@@ -159,6 +160,8 @@ void MapperOrchestratorNode::handle_command(
             transition_to_unlocked(prev);  // H4
             if (prev == MapperState::MAPPING_MANUAL)
                 launch_worker([self]{ self->run_mapping_manual(); });
+            else if (prev == MapperState::MAPPING_AUTO)
+                launch_worker([self]{ self->run_mapping_auto(); });
             else if (prev == MapperState::EXPLORING_UNKNOWN)
                 launch_worker([self]{ self->run_exploring(); });
             res->success = true;
@@ -419,7 +422,15 @@ void MapperOrchestratorNode::run_verifying_map() {
 
     if (is_aligned->load()) {
         log("Map alignment verified");
-        transition_to(MapperState::MAPPING_MANUAL);
+        if (drive_mode_.load() == 0) {
+            transition_to(MapperState::MAPPING_MANUAL);
+            launch_worker([self = std::static_pointer_cast<MapperOrchestratorNode>(
+                               shared_from_this())]{ self->run_mapping_manual(); });
+        } else {
+            transition_to(MapperState::MAPPING_AUTO);
+            launch_worker([self = std::static_pointer_cast<MapperOrchestratorNode>(
+                               shared_from_this())]{ self->run_mapping_auto(); });
+        }
     } else {
         log("Map misaligned -- re-aligning");
         total_realign_count_.fetch_add(1);
@@ -507,6 +518,13 @@ void MapperOrchestratorNode::run_exploring() {
         log("Exploration failed");
         transition_to(MapperState::MAPPING_MANUAL);
     }
+}
+
+void MapperOrchestratorNode::run_mapping_auto() {
+    if (state_.load() == MapperState::IDLE || shutdown_requested_.load()) return;
+    log("Auto mapping mode -- starting exploration");
+    transition_to(MapperState::EXPLORING_UNKNOWN);
+    run_exploring();
 }
 
 void MapperOrchestratorNode::run_loop_closing() {

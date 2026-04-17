@@ -87,6 +87,7 @@ private:
     void run_starting_slam();
     void run_verifying_map();
     void run_mapping_manual();
+    void run_mapping_auto();
     void run_loop_closing();
     void run_exploring();
 
