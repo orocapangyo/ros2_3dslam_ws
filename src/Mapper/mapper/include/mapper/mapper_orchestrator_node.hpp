@@ -13,6 +13,7 @@
 #include <functional>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <nav_msgs/msg/occupancy_grid.hpp>
 
 namespace mapper {
 
@@ -66,6 +67,9 @@ private:
 
     std::shared_ptr<tf2_ros::Buffer>            tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+    std::atomic<float> map_coverage_{0.0f};
 
     rclcpp::Service<mapper_interfaces::srv::MapperCommand>::SharedPtr cmd_service_;
     rclcpp::Publisher<mapper_interfaces::msg::MapperStatus>::SharedPtr status_pub_;

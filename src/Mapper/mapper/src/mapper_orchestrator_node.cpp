@@ -47,6 +47,19 @@ MapperOrchestratorNode::MapperOrchestratorNode(
 
     tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
+        "/map",
+        rclcpp::QoS(1).reliable().transient_local(),
+        [this](const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
+            if (msg->data.empty()) return;
+            int known = 0;
+            for (auto cell : msg->data) { if (cell != -1) ++known; }
+            float cov = static_cast<float>(known) /
+                        static_cast<float>(msg->data.size()) * 100.0f;
+            map_coverage_.store(cov);
+            coverage_percent_.store(cov);
+        });
 }
 
 MapperOrchestratorNode::~MapperOrchestratorNode() {
@@ -422,7 +435,24 @@ void MapperOrchestratorNode::run_verifying_map() {
 }
 
 void MapperOrchestratorNode::run_mapping_manual() {
-    log("Manual mapping mode -- waiting for commands");
+    if (state_.load() == MapperState::IDLE || shutdown_requested_.load()) return;
+    log("Manual mapping mode -- waiting for commands or coverage target");
+    while (rclcpp::ok()) {
+        auto cur = state_.load();
+        if (cur == MapperState::IDLE || shutdown_requested_.load()) return;
+        if (cur == MapperState::PAUSED) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+        float cov = map_coverage_.load();
+        if (cov >= min_coverage_to_stop_.load() * 100.0f) {
+            log("Coverage target reached in manual mode -- starting loop closure");
+            transition_to(MapperState::LOOP_CLOSING);
+            run_loop_closing();
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
 }
 
 void MapperOrchestratorNode::run_exploring() {
