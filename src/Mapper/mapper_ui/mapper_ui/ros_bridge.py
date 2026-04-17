@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QObject, pyqtSignal
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from geometry_msgs.msg import Twist
 from mapper_interfaces.msg import MapperStatus
 from mapper_interfaces.srv import MapperCommand
 
@@ -56,6 +57,8 @@ class RosBridge(QObject):
         self._cmd_client = node.create_client(
             MapperCommand, 'mapper/command')
 
+        self._cmd_vel_pub = node.create_publisher(Twist, '/cmd_vel', 10)
+
     def _on_status(self, msg: MapperStatus):
         self.status_received.emit(msg)
         if msg.log_message and msg.log_message != self._last_log:
@@ -84,3 +87,9 @@ class RosBridge(QObject):
                 self.log_received.emit(f"[ERROR] Command failed: {result.message}")
         except Exception as e:
             self.log_received.emit(f"[ERROR] Service call failed: {e}")
+
+    def publish_cmd_vel(self, linear_x: float = 0.0, angular_z: float = 0.0):
+        msg = Twist()
+        msg.linear.x  = linear_x
+        msg.angular.z = angular_z
+        self._cmd_vel_pub.publish(msg)

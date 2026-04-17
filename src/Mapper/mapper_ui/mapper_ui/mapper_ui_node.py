@@ -33,6 +33,13 @@ class MapperMainWindow(QMainWindow):
         self.btn_stop.clicked.connect(self._on_stop)
         self.btn_explore.clicked.connect(self._on_explore)
 
+        self.btn_forward.pressed.connect(self._on_forward_pressed)
+        self.btn_forward.released.connect(self._on_drive_released)
+        self.btn_left.pressed.connect(self._on_left_pressed)
+        self.btn_left.released.connect(self._on_drive_released)
+        self.btn_right.pressed.connect(self._on_right_pressed)
+        self.btn_right.released.connect(self._on_drive_released)
+
         self._update_buttons(MapperStatus.STATE_IDLE)
 
     def _on_status(self, msg: MapperStatus):
@@ -93,6 +100,21 @@ class MapperMainWindow(QMainWindow):
 
     def _on_explore(self):
         self.bridge.send_command(MapperCommand.Request.CMD_EXPLORE)
+
+    DRIVE_LINEAR  = 0.2   # m/s
+    DRIVE_ANGULAR = 0.5   # rad/s
+
+    def _on_forward_pressed(self):
+        self.bridge.publish_cmd_vel(linear_x=self.DRIVE_LINEAR)
+
+    def _on_left_pressed(self):
+        self.bridge.publish_cmd_vel(angular_z=self.DRIVE_ANGULAR)
+
+    def _on_right_pressed(self):
+        self.bridge.publish_cmd_vel(angular_z=-self.DRIVE_ANGULAR)
+
+    def _on_drive_released(self):
+        self.bridge.publish_cmd_vel()  # 0, 0 → 정지
 
 
 def main():
