@@ -200,10 +200,10 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
                 'gazebo': ('tm_gazebo', 'gazebo.launch.py'),
                 'motion_control': ('amr_motion_control_2wd', 'motion_control_gazebo.launch.py'),
                 'orbbec_camera': ('orbbec_camera', 'astra_pro.launch.py'),  # Not used in Gazebo
-                'rgbd_mapping': ('rtab_map_3d_config', 'rtabmap_rgbd_gazebo.launch.py'),
-                'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_loc_gazebo.launch.py'),
-                'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_gazebo.launch.py'),
-                'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_loc_gazebo.launch.py'),
+                'rgbd_mapping': ('rtab_map_3d_config', 'rtabmap_rgbd_slam_gazebo.launch.py'),
+                'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_localization_gazebo.launch.py'),
+                'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_slam_gazebo.launch.py'),
+                'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_localization_gazebo.launch.py'),
                 'lio_sam_mapping': ('livox_lio_sam', 'run_slam_gazebo.launch.py'),
                 'lio_sam_loc': ('livox_lio_sam', 'run_localization_gazebo.launch.py'),
                 'rtabmap_3dlidar_mapping': ('rtab_map_3d_config', 'rtabmap_3dlidar_only_slam_gazebo.launch.py'),
@@ -212,14 +212,22 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
         else:
             self.log("Real robot mode - using real robot launch files")
             # Real robot launch files
+            # Gazebo / Motion Control / 3D-LiDAR 계열은 여기에서도 등록해야 한다.
+            # - Gazebo/MotionControl: UI에서 시뮬레이터를 기동할 수 있어야 하므로 필요.
+            # - rtabmap_3dlidar_*: 실기용 launch 파일이 없어 `_gazebo` 변형만 존재하며,
+            #   launch 인자 `use_sim_time`이 UI 체크박스로 전달되므로 두 모드 공용 가능.
             launch_config = {
+                'gazebo': ('tm_gazebo', 'gazebo.launch.py'),
+                'motion_control': ('amr_motion_control_2wd', 'motion_control_gazebo.launch.py'),
                 'orbbec_camera': ('orbbec_camera', 'astra_pro.launch.py'),
-                'rgbd_mapping': ('rtab_map_3d_config', 'rtabmap_rgbd.launch.py'),
-                'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_loc.launch.py'),
-                'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd.launch.py'),
-                'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_loc.launch.py'),
+                'rgbd_mapping': ('rtab_map_3d_config', 'rtabmap_rgbd_slam.launch.py'),
+                'rgbd_loc': ('rtab_map_3d_config', 'rtabmap_rgbd_localization.launch.py'),
+                'rgbd_lidar_mapping': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_slam.launch.py'),
+                'rgbd_lidar_loc': ('rtab_map_3d_config', 'rtabmap_2dlidar_rgbd_localization.launch.py'),
                 'lio_sam_mapping': ('livox_lio_sam', 'run_slam.launch.py'),
                 'lio_sam_loc': ('livox_lio_sam', 'run_localization.launch.py'),
+                'rtabmap_3dlidar_mapping': ('rtab_map_3d_config', 'rtabmap_3dlidar_only_slam_gazebo.launch.py'),
+                'rtabmap_3dlidar_loc': ('rtab_map_3d_config', 'rtabmap_3dlidar_only_localization_gazebo.launch.py'),
             }
 
         # Check each package and register launch files
@@ -569,6 +577,7 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             if self.node.start_launch_file('rgbd_loc', pkg, launch,
                                            extra_args=' '.join(extra_args) if extra_args else None):
                 self.log(f"RTAB-Map RGB-D Localization started with map: {map_path}")
+                self._schedule_global_map_publish()
                 self.update_button_states()
         else:
             self.log("RTAB-Map RGB-D localization launch file not found!")
@@ -662,6 +671,7 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             if self.node.start_launch_file('rgbd_lidar_loc', pkg, launch,
                                            extra_args=' '.join(extra_args) if extra_args else None):
                 self.log(f"RTAB-Map RGB-D + LiDAR Localization started with map: {map_path}")
+                self._schedule_global_map_publish()
                 self.update_button_states()
         else:
             self.log("RTAB-Map RGB-D + LiDAR localization launch file not found!")
@@ -816,6 +826,7 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
             if self.node.start_launch_file('rtabmap_3dlidar_loc', pkg, launch,
                                            extra_args=' '.join(extra_args) if extra_args else None):
                 self.log(f"RTAB-Map 3D LiDAR Localization started with map: {map_path}")
+                self._schedule_global_map_publish()
                 self.update_button_states()
         else:
             self.log("RTAB-Map 3D LiDAR localization launch file not found!")
@@ -850,12 +861,51 @@ class SlamManager3DUI(QtWidgets.QMainWindow):
 
         return True
 
+    def _schedule_global_map_publish(self, service_name='/rtabmap/rtabmap/publish_map',
+                                      delay_ms=4000):
+        """Localization 기동 후 지연 시간을 두고 global_map=true 로 publish_map 서비스를 호출.
+
+        기본 /rtabmap/cloud_map 발행은 WM(Working Memory) 서브셋만 포함한다.
+        DB 에 저장된 LTM(Long-Term Memory) 전체 노드를 포함시키려면
+        publish_map 을 global_map=true 로 명시 호출해야 한다.
+        QTimer.singleShot 으로 rtabmap 이 올라온 뒤 1회 비동기 호출.
+        """
+        def _call():
+            try:
+                subprocess.Popen(
+                    ['ros2', 'service', 'call', service_name,
+                     'rtabmap_msgs/srv/PublishMap',
+                     "{optimized: true, graph_only: false, global_map: true}"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                self.log(f"Scheduled global map publish: {service_name}")
+            except Exception as e:
+                self.log(f"publish_map call failed: {e}")
+        QTimer.singleShot(delay_ms, _call)
+
     def _prepare_map_for_localization(self, map_path):
-        """Copy map to default RTAB-Map location"""
+        """Copy map to default RTAB-Map location and clear stale opt_* caches.
+
+        rtabmap은 Admin.opt_map/opt_cloud/opt_poses 캐시를 latched 로 먼저 발행하므로,
+        구버전 캐시가 남아있으면 RViz에 옛 맵이 고정되어 per-node grid 재조립이 반영되지 않는다.
+        매 기동마다 캐시를 NULL 로 비워 rtabmap 이 새로 어셈블하도록 강제한다.
+        """
         import shutil
+        import sqlite3
         default_db = Path.home() / ".ros" / "rtabmap.db"
         shutil.copy2(map_path, str(default_db))
-        self.log(f"Map copied to: {default_db}")
+        try:
+            con = sqlite3.connect(str(default_db))
+            cur = con.cursor()
+            cur.execute(
+                "UPDATE Admin SET opt_cloud=NULL, opt_poses=NULL, opt_map=NULL, "
+                "opt_map_x_min=NULL, opt_map_y_min=NULL, opt_map_resolution=NULL"
+            )
+            con.commit()
+            con.close()
+        except Exception as e:
+            self.log(f"opt_map cache clear skipped: {e}")
+        self.log(f"Map copied to: {default_db} (opt_* caches cleared)")
 
     def _save_rtabmap_db(self, prefix):
         """Save RTAB-Map database"""
