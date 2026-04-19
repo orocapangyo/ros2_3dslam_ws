@@ -162,6 +162,84 @@
          </widget>
         </item>
         <item>
+         <widget class="QGroupBox" name="groupMotionControl">
+          <property name="title">
+           <string>Motion Control</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_motion_control">
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_motion_control">
+             <item>
+              <widget class="QPushButton" name="btnStartMotionControl">
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Start Motion Control</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: #4CAF50; color: white; font-weight: bold; padding: 10px;</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnStopMotionControl">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Stop Motion Control</string>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">padding: 10px;</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_motion_control">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblMotionControlStatus">
+             <property name="text">
+              <string>Status: Stopped</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblMotionControlInfo">
+             <property name="text">
+              <string>* Launches amr_motion_control_2wd (motion_control_gazebo.launch.py)</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">font-style: italic; color: #FF5722;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
          <widget class="QGroupBox" name="groupOrbbec">
           <property name="title">
            <string>Orbbec Camera</string>
