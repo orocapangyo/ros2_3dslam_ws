@@ -1,52 +1,34 @@
 #include <gtest/gtest.h>
+#include <rclcpp/rclcpp.hpp>
 #include "mapper/wall_aligner_node.hpp"
-#include <sensor_msgs/msg/laser_scan.hpp>
-#include <cmath>
 
-TEST(WallAlignerTest, DetectsHorizontalWall) {
-    rclcpp::init(0, nullptr);
+/*
+ * 주의: RANSAC 벽 탐지 테스트는 wall_detector 패키지
+ * (test_wall_detector.cpp) 로 이전되었다.
+ *
+ * wall_aligner_node는 이제 /wall_detector/longest_wall 을 구독하므로
+ * 탐지 로직 자체는 여기서 테스트하지 않는다.
+ *
+ * 본 파일은 노드 생성/파라미터 로드 스모크 테스트만 수행한다.
+ * 정렬 루프 통합 테스트는 SIL(Gazebo) 환경에서 수행한다.
+ */
+
+class WallAlignerSmokeTest : public ::testing::Test {
+protected:
+    static void SetUpTestSuite()   { rclcpp::init(0, nullptr); }
+    static void TearDownTestSuite() { rclcpp::shutdown(); }
+};
+
+TEST_F(WallAlignerSmokeTest, NodeConstructsWithDefaults) {
     auto node = std::make_shared<mapper::WallAlignerNode>();
-
-    sensor_msgs::msg::LaserScan scan;
-    scan.angle_min = -M_PI / 2;
-    scan.angle_max =  M_PI / 2;
-    scan.angle_increment = 0.01f;
-    scan.range_min = 0.1f;
-    scan.range_max = 10.0f;
-
-    int n = (int)((scan.angle_max - scan.angle_min) / scan.angle_increment);
-    scan.ranges.resize(n);
-    for (int i = 0; i < n; ++i) {
-        double a = scan.angle_min + i * scan.angle_increment;
-        if (std::abs(std::sin(a)) > 0.05) {
-            scan.ranges[i] = (float)std::abs(1.0 / std::sin(a));
-        } else {
-            scan.ranges[i] = scan.range_max;
-        }
-    }
-
-    auto result = node->detect_longest_wall(scan);
-    EXPECT_GT(result.inlier_count, 10);
-    EXPECT_GE(result.angle_deg, 0.0);
-    EXPECT_LT(result.angle_deg, 180.0);
-    rclcpp::shutdown();
+    EXPECT_EQ(std::string(node->get_name()), "wall_aligner_node");
 }
 
-TEST(WallAlignerTest, AngleNormalized0To180) {
-    rclcpp::init(0, nullptr);
+TEST_F(WallAlignerSmokeTest, ParametersAreDeclared) {
     auto node = std::make_shared<mapper::WallAlignerNode>();
-
-    sensor_msgs::msg::LaserScan scan;
-    scan.angle_min = -M_PI / 2;
-    scan.angle_max =  M_PI / 2;
-    scan.angle_increment = 0.01f;
-    scan.range_min = 0.1f;
-    scan.range_max = 10.0f;
-    int n = (int)((scan.angle_max - scan.angle_min) / scan.angle_increment);
-    scan.ranges.resize(n, 2.0f);
-
-    auto result = node->detect_longest_wall(scan);
-    EXPECT_GE(result.angle_deg, 0.0);
-    EXPECT_LT(result.angle_deg, 180.0);
-    rclcpp::shutdown();
+    EXPECT_TRUE(node->has_parameter("tolerance_deg"));
+    EXPECT_TRUE(node->has_parameter("max_attempts"));
+    EXPECT_TRUE(node->has_parameter("cooldown_ms"));
+    EXPECT_TRUE(node->has_parameter("min_inlier_ratio"));
+    EXPECT_TRUE(node->has_parameter("wall_topic"));
 }
