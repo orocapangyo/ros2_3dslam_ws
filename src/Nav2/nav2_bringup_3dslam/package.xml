@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>nav2_bringup_3dslam</name>
+  <version>0.0.1</version>
+  <description>
+    Nav2 bringup for the ros2_3dslam_ws (Pioneer2dx + Gazebo + RTAB-Map 3D
+    localization). Provides a pure Nav2 launch and an integrated full-stack
+    launch that starts Gazebo, RTAB-Map localization, and Nav2 together.
+  </description>
+  <maintainer email="kukwonko@gmail.com">amap</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>nav2_smac_hybrid</exec_depend>
+  <exec_depend>tm_gazebo</exec_depend>
+  <exec_depend>rtab_map_3d_config</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>nav2_rviz_plugins</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
